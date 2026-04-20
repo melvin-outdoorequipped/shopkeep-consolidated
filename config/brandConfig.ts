@@ -1,0 +1,102 @@
+// config/brandConfig.ts
+
+export const brandConfigs = [
+  {
+    brandName: "Olukai",
+    spreadsheetId: "1_IWYjwyPlEDFecvU5qdY2v416n_N4bY-4czH3ZtvYak", // Grab this from the Google Sheet URL
+    sheetName: "Sheet1",
+    columns: {
+      upc: "UPC/EAN",
+      sku: "SKU",
+      style_number: "Style No",
+      description: "Item Name",
+      name: "Shopkeep Name (Max Length: 35)",
+      color: "Color Desc",
+      size: "Size",
+      gender: "Gender"
+    }
+  },
+  {
+    brandName: "Free Fly",
+    spreadsheetId: "1A2aKFaHiTVBgYAfBa2swMPClIjhHzRu-wRK_mFsUvCA",
+    sheetName: "Sheet1",
+    columns: {
+      upc: "UPC",
+      sku: "SKU",
+      style_number: "Style Number",
+      description: "Description",
+      name: "Shopkeep Name",
+      color: "Color Name",
+      color_code: "Color Code",
+      size: "Size"
+    }
+  },
+  {
+    brandName: "Chaco",
+    spreadsheetId: "14s9iV8zazeJuldS0HpVYfGkygGLpl42-Ga7Z-ofZJeI",
+    sheetname: "Sheet1",
+    columns: {
+      upc: "UPC/EAN",
+      sku: "SKU",
+      style_number: "Style No",
+      description: "Description",
+      name: "Shopkeep Name (Max Length: 35)",
+      color: "Color Desc",
+      size: "Size",
+      gender: "Gender"
+    }
+  },
+  {
+    brandName: "Chums",
+    spreadsheetId: "1sJPKXfKqf02qCuqJWtwP0INdL4XoYGSGyaJ3HULNOdg",
+    sheetname: "Sheet1",
+    columns:{
+      upc: "UPC by Color",
+      sku: "SKU",
+      style_number: "Style Number",
+      description: "Description",
+      name: "Shopkeep name"
+    }
+  },
+  {
+    brandName: "Dakine",
+    spreadsheetId: "1wBtJsHwTClOrESfymtc3BGtn-C7UNHeF8TNPZaGovq4",
+    sheetname: "Sheet1",
+    columns:{
+      upc: "UPC",
+      sku: "SKU",
+      style_number: "STYLE NUMBER",
+      description: "ITEM DESCRIPTION",
+      name: "SHOPKEEP NAME",
+      color: "COLOR NAME",
+      size: "SIZE"
+    }
+  },
+  {
+    brandName: "Floafers",
+    spreadsheetId: "14TtsYiVoPTPJvSutozzaOGFmwBADmRHd0Kg8zp78sKg",
+    sheetname: "Sheet1",
+    columns: {
+      upc: "UPC/EAN",
+      sku: "SKU",
+      style_number: "Style",
+      description: "Description",
+      name: "Shopkeep Name",
+      color: "Color Desc",
+      color_code: "Color Code",
+      size: "Size",
+      gender: "Gender"
+    }
+  },
+  {
+    brandName: "Goodr",
+    spreadsheetId: "1uQllV0hW0ZnM7sjkeUy1p6j48TKuclEIxKW12S5gWcY",
+    sheetname: "Sheet1",
+    columns: {
+      upc: "UPC",
+      sku: "SKU",
+      name: "Shopkeep Name",
+      description: "Item Name"
+    }
+  }
+];
