@@ -29,8 +29,14 @@ export async function POST(req: Request) {
       try {
         const doc = await getGoogleSheet(config.spreadsheetId);
         
-        // Grab the specific sheet
-        const sheet = doc.sheetsByTitle[config.sheetName] || doc.sheetsByIndex[0];
+        // Grab the specific sheet - fix the type safety issue
+        const sheet = doc.sheetsByTitle[config.sheetName as string] || doc.sheetsByIndex[0];
+        
+        if (!sheet) {
+          console.error(`No sheet found for ${config.brandName}`);
+          continue;
+        }
+        
         const rows = await sheet.getRows();
 
         // Check each row in the Google Sheet against the user's requested UPCs
