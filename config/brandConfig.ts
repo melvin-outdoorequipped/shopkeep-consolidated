@@ -98,5 +98,44 @@ export const brandConfigs = [
       name: "Shopkeep Name",
       description: "Item Name"
     }
+  },
+  {
+    brandName: "Hurley",
+    spreadsheetId: "1uMJ2BY0wJDI6qYI8AdqoH63Sth83xSa4f0LuXSdQ1e4",
+    sheetname: "Sheet1",
+    columns: {
+      upc: "UPC",
+      sku: "SKU",
+      style_number: "Style #",
+      name: "Shopkeep Title",
+      description: "Item name",
+      color_code: "Color code",
+      color: "Color description",
+      size: "Size"
+    }
+  },
+  {
+    brandName: "Kuhl",
+    spreadsheetId: "1s_m7kZjREA0-0uYmXn25QOUbo6qmqTo5yQlPM92txb4",
+    sheetname: "Sheet1",
+    columns: {
+      upc: "UPC",
+      sku: "SKU",
+      style_number: "Style number",
+      color_code: "Color Code",
+      size: "Size",
+      gender: "Gender"
+    }
+  },
+  {
+    brandName: "Luminox",
+    spreadsheetId: "1DIBGV09kpztdC0KZQVLa23yTDld8T96JfZNlICfm6a4",
+    sheetname: "Sheet1",
+    columns: {
+      upc: "UPC",
+      sku: "item Code/SKU",
+      name: "Shopkeep name",
+      description: "Item Description"
+    }
   }
 ];
