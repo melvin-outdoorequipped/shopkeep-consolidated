@@ -30,13 +30,14 @@ export async function POST(req: Request) {
 
     const consolidatedData: any[] = [];
     const brandsFound = new Set<string>();
+    const matchedSkus = new Set<string>(); // Track which SKUs were matched
 
     // Loop through each brand configuration
     for (const config of brandConfigs) {
       try {
         const doc = await getGoogleSheet(config.spreadsheetId);
         
-        // Grab the specific sheet - fix the type safety issue
+        // Grab the specific sheet
         const sheet = doc.sheetsByTitle[config.sheetName as string] || doc.sheetsByIndex[0];
         
         if (!sheet) {
@@ -55,10 +56,13 @@ export async function POST(req: Request) {
             if (config.brandName) {
               brandsFound.add(config.brandName);
             }
+
+            // Track matched SKU
+            matchedSkus.add(rowSku);
             
             // Build the data object with all fields using safe column access
             const dataRow: any = {
-              Brand: config.brandName || 'Unknown Brand', // Provide a fallback
+              Brand: config.brandName || 'Unknown Brand',
               SKU: rowSku,
               UPC: getSafeColumnValue(row, config.columns.upc),
               Shopkeep_Name: getSafeColumnValue(row, config.columns.name),
@@ -74,7 +78,7 @@ export async function POST(req: Request) {
           }
         }
       } catch (sheetError) {
-         console.error(`Failed to process sheet for ${config.brandName}:`, sheetError);
+        console.error(`Failed to process sheet for ${config.brandName}:`, sheetError);
       }
     }
 
@@ -83,18 +87,21 @@ export async function POST(req: Request) {
     const date = new Date().toISOString().split('T')[0];
     
     if (consolidatedData.length === 0) {
-       consolidatedData.push({ 
-         Brand: "No matches found", 
-         SKU: "-", 
-         UPC: "-", 
-         Shopkeep_Name: "-",
-         Style_Number: "-",
-         Description: "-",
-         Color: "-",
-         Color_Code: "-",
-         Size: "-",
-         Gender: "-"
-       });
+      // No matches found - return empty worksheet with headers
+      filename = `No_Matches_${date}.xlsx`;
+      const headers = {
+        Brand: '-',
+        SKU: '-',
+        UPC: '-',
+        Shopkeep_Name: '-',
+        Style_Number: '-',
+        Description: '-',
+        Color: '-',
+        Color_Code: '-',
+        Size: '-',
+        Gender: '-'
+      };
+      consolidatedData.push(headers);
     } else {
       // Build filename with brands found
       const brandsList = Array.from(brandsFound).join('_');
@@ -103,20 +110,32 @@ export async function POST(req: Request) {
 
     // Create Excel workbook
     const worksheet = xlsx.utils.json_to_sheet(consolidatedData);
+    
+    // Set column widths for better readability
+    const maxWidth = 20;
+    const colWidths = Object.keys(consolidatedData[0] || {}).map(() => ({
+      wch: maxWidth,
+    }));
+    worksheet['!cols'] = colWidths;
+    
     const workbook = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(workbook, worksheet, "Consolidated SKUs");
 
     // Generate buffer
     const buf = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 
-    // Return the file as a downloadable response with brands info in custom header
+    // Return the file as a downloadable response with metadata in custom headers
     const brandsArray = Array.from(brandsFound);
+    const matchCount = matchedSkus.size;
+
     return new Response(buf, {
       status: 200,
       headers: {
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'X-Brands-Found': JSON.stringify(brandsArray),
+        'X-Match-Count': matchCount.toString(),
+        'X-Total-Requested': skuArray.length.toString(),
       },
     });
 
