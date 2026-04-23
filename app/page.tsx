@@ -15,7 +15,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">TARA</h1>
-            <p className="text-xs text-slate-400 mt-0.5">Operation Tools Dashboard</p>
+            <p className="text-xs text-slate-400 mt-0.5">Listings Ops Tools</p>
           </div>
           
           {/* Navigation Controls */}
