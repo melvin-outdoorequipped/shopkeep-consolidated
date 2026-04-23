@@ -137,5 +137,40 @@ export const brandConfigs = [
       name: "Shopkeep name",
       description: "Item Description"
     }
+  },
+  {
+    brandName: "Maui Jim",
+    spreadsheetId: "1lbexbVup3-YrC0V8lhIwIZz3sL77a6UamxLIp-TGkP4",
+    sheetname: "Sheet1",
+    columns: {
+      upc: "UPC",
+      sku: "SKU",
+      name: "Shopkeep Title",
+      description: "Description"
+    }
+  },
+  {
+    brandName: "Luxottica",
+    spreadsheetId: "1_BG_mX2u02ihUJA0s6XQRYJtTE7GyAiou4eZVvmK6jk",
+    sheetname: "Sheet1",
+    columns: {
+      upc: "UPC",
+      sku: "SKU",
+      style_number: "Material",
+      name: "Shopkeep Name",
+      description: "Description"
+    }
+  },
+  {
+    branName:"Mavi Jeans ",
+    spreadsheetId: "1EC0ZZGrTYeo4muajy3EGAvdt-TvGmNwB7Ww4RBiC854",
+    sheetname: "Sheet1",
+    columns:{
+      upc: "UPC",
+      sku: "SKU",
+      style_number: "Style name",
+      name: "Shopkeep Title",
+      description: "Item name"
+    }
   }
 ];
