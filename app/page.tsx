@@ -38,7 +38,7 @@ export default function Home() {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
               }`}
             >
-              ASIN Checker
+              Multiple Parent ASIN Checker
             </button>
           </div>
 
