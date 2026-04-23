@@ -109,12 +109,14 @@ export async function POST(req: Request) {
     // Generate buffer
     const buf = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 
-    // Return the file as a downloadable response
+    // Return the file as a downloadable response with brands info in custom header
+    const brandsArray = Array.from(brandsFound);
     return new Response(buf, {
       status: 200,
       headers: {
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'X-Brands-Found': JSON.stringify(brandsArray),
       },
     });
 
