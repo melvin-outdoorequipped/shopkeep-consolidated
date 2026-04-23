@@ -52,11 +52,13 @@ export async function POST(req: Request) {
           
           if (rowSku && skuArray.includes(rowSku)) {
             // Track which brands we found results for
-            brandsFound.add(config.brandName);
+            if (config.brandName) {
+              brandsFound.add(config.brandName);
+            }
             
             // Build the data object with all fields using safe column access
             const dataRow: any = {
-              Brand: config.brandName,
+              Brand: config.brandName || 'Unknown Brand', // Provide a fallback
               SKU: rowSku,
               UPC: getSafeColumnValue(row, config.columns.upc),
               Shopkeep_Name: getSafeColumnValue(row, config.columns.name),
