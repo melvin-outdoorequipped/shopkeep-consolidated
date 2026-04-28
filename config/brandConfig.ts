@@ -162,7 +162,7 @@ export const brandConfigs = [
     }
   },
   {
-    branName:"Mavi Jeans ",
+    brandName:"Mavi Jeans ",
     spreadsheetId: "1EC0ZZGrTYeo4muajy3EGAvdt-TvGmNwB7Ww4RBiC854",
     sheetname: "Sheet1",
     columns:{
@@ -171,6 +171,57 @@ export const brandConfigs = [
       style_number: "Style name",
       name: "Shopkeep Title",
       description: "Item name"
+    }
+  },
+  {
+    brandName: "Oakley AFA",
+    spreadsheetId: "1Cl1wZ2LLRGuaXUwjF5Oyl41ET7g219S7rKtm6t9Ro8A",
+    sheetname:"Sheet1",
+    columns:{
+      upc: "UPC",
+      sku: "SKU",
+      style_number: "Style #",
+      name: "Shopkeep Title",
+    }
+  },
+  {
+    brandName: "Oboz",
+    spreadsheetId: "1wK4743lo4VcuH2UUXhy_s2KxVwKtytRwEAkJ61shUPQ",
+    sheetname: "Sheet1",
+    columns: {
+      upc: "UPC",
+      sku: "SKU",
+      style_number: "Style Number",
+      name: "Shopkeep name",
+      description: "Product Description",
+      color: "Color",
+      gender: "Gender",
+      size: "Size"
+    }
+  },
+  {
+    brandName: "Oakley Eyewear",
+    spreadsheetId: "17Fo0vIcc5uqutJTY-fDOeDyZ3XGcEK77T6_z9txGBlY",
+    sheetname:"Sheet1",
+    columns:{
+      upc: "UPC",
+      sku: "SKU",
+      style_number: "Model",
+      name: "Shopkeep Name",
+      description: "Description",
+      color: "Color/Size"
+    }
+  },
+  {
+    brandName: "On running",
+    spreadsheetId: "1L2yf7dL7w813_40MPrarmd14rQKoS0_Q4EBn0YyRyP4",
+    sheetname:"Sheet1",
+    columns:{
+      upc: "UPC",
+      sku: "SKU",
+      style_number: "Style number",
+      name: "Shopkeep title",
+      description: "Item name",
     }
   }
 ];
