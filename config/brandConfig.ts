@@ -223,5 +223,16 @@ export const brandConfigs = [
       name: "Shopkeep title",
       description: "Item name",
     }
+  },
+  {
+    brandName: "Otbt",
+    spreadsheetId: "1uKnW-GcyqH3dBx4afpc744OyLhrRAu19g-mS09zV_jY",
+    sheetname:"Sheet1",
+    columns:{
+      upc: "UPC",
+      sku: "SKU",
+      name: "Shopkeep title",
+      description: "Style name",
+    }
   }
 ];
