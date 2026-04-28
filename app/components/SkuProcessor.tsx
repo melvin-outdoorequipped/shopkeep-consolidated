@@ -13,6 +13,7 @@ interface BatchStatus {
   dateImported: string;
   brandsFound: string[];
   filename: string;
+  error?: string;
 }
 
 export default function SkuProcessor() {
@@ -62,12 +63,18 @@ export default function SkuProcessor() {
         body: JSON.stringify({ skus }),
       });
 
-      if (!response.ok) throw new Error('Network response was not ok');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Network response was not ok');
+      }
 
       const brandsHeader = response.headers.get('x-brands-found');
       const matchCountHeader = response.headers.get('x-match-count');
+      const totalRequestedHeader = response.headers.get('x-total-requested');
+      
       const brands = brandsHeader ? JSON.parse(brandsHeader) : [];
       const matchedCount = matchCountHeader ? parseInt(matchCountHeader) : 0;
+      const totalRequested = totalRequestedHeader ? parseInt(totalRequestedHeader) : skuArray.length;
 
       setBatchStatus((prev) =>
         prev
@@ -103,9 +110,9 @@ export default function SkuProcessor() {
 
       const completedBatch: BatchStatus = {
         id: batchId,
-        skuCount: skuArray.length,
+        skuCount: totalRequested,
         matchedCount,
-        status: 'completed',
+        status: matchedCount === 0 ? 'completed' : 'completed',
         progress: 100,
         timestamp: now.toLocaleTimeString(),
         dateImported: now.toLocaleString(),
@@ -116,11 +123,15 @@ export default function SkuProcessor() {
       setBatchStatus(completedBatch);
       setBatchHistory([completedBatch, ...batchHistory]);
 
+      // Show success message for 3 seconds then clear
       setTimeout(() => {
         setShowStatus(false);
         setBatchStatus(null);
-        setSkus('');
-      }, 2000);
+        // Only clear SKUs if matches were found
+        if (matchedCount > 0) {
+          setSkus('');
+        }
+      }, 3000);
     } catch (error) {
       console.error('Error:', error);
       const failedBatch: BatchStatus = {
@@ -133,13 +144,14 @@ export default function SkuProcessor() {
         dateImported: now.toLocaleString(),
         brandsFound: [],
         filename: '',
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
       };
       setBatchStatus(failedBatch);
       setBatchHistory([failedBatch, ...batchHistory]);
 
       setTimeout(() => {
         setShowStatus(false);
-      }, 2000);
+      }, 4000);
     } finally {
       setIsLoading(false);
     }
@@ -203,6 +215,12 @@ export default function SkuProcessor() {
     }
   };
 
+  // Load sample SKUs for testing (optional)
+  const loadSampleSkus = () => {
+    // Add some sample SKUs that might exist in your sheets
+    setSkus('SKU12345\nSKU67890\nSKU11111');
+  };
+
   return (
     <div className="space-y-6">
       {/* Input Card */}
@@ -216,29 +234,40 @@ export default function SkuProcessor() {
 
             <textarea
               className="w-full h-40 bg-slate-950 text-slate-200 border border-slate-600 rounded-lg p-3 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 mb-4 font-mono text-xs resize-none transition-all placeholder-slate-500"
-              placeholder="SK001&#10;SK002&#10;SK003"
+              placeholder="Enter SKUs one per line:&#10;SKU12345&#10;SKU67890&#10;SKU11111"
               value={skus}
               onChange={(e) => setSkus(e.target.value)}
               disabled={isLoading}
             />
 
-            <button
-              onClick={handleProcess}
-              disabled={isLoading || !skus}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white px-4 py-2.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-emerald-500/25"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  Process & Download
-                </>
-              )}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleProcess}
+                disabled={isLoading || !skus}
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white px-4 py-2.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-emerald-500/25"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Process & Download
+                  </>
+                )}
+              </button>
+              
+              <button
+                onClick={loadSampleSkus}
+                disabled={isLoading}
+                className="px-3 py-2.5 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 text-sm transition-colors"
+                title="Load sample SKUs"
+              >
+                Sample
+              </button>
+            </div>
 
             {batchStatus && (
               <div className="mt-5 pt-5 border-t border-slate-700/50 space-y-3">
@@ -253,7 +282,22 @@ export default function SkuProcessor() {
                   <span className="text-emerald-400 font-semibold">
                     {batchStatus.skuCount}
                   </span>
+                  <span> SKUs matched</span>
                 </div>
+                {batchStatus.brandsFound.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {batchStatus.brandsFound.map((brand) => (
+                      <span key={brand} className="text-xs px-2 py-0.5 bg-emerald-600/20 text-emerald-400 rounded">
+                        {brand}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {batchStatus.error && (
+                  <div className="text-xs text-red-400 bg-red-600/10 p-2 rounded">
+                    Error: {batchStatus.error}
+                  </div>
+                )}
                 <div className="w-full bg-slate-700/30 rounded-full h-1.5 overflow-hidden">
                   <div
                     className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-full rounded-full transition-all duration-300"
@@ -282,7 +326,9 @@ export default function SkuProcessor() {
                 <div className="flex-1">
                   <h3 className="font-semibold text-white">
                     {batchStatus.status === 'completed'
-                      ? 'Batch Processed Successfully'
+                      ? batchStatus.matchedCount === 0
+                        ? 'No Matches Found'
+                        : 'Batch Processed Successfully'
                       : batchStatus.status === 'processing'
                       ? 'Processing Batch'
                       : batchStatus.status === 'failed'
@@ -292,18 +338,27 @@ export default function SkuProcessor() {
 
                   <div className="mt-3 space-y-2 text-sm">
                     <div className="text-slate-300">
-                      <span className="text-emerald-400 font-semibold">
-                        {batchStatus.matchedCount}
-                      </span>
-                      <span> of </span>
-                      <span className="text-emerald-400 font-semibold">
-                        {batchStatus.skuCount}
-                      </span>
-                      <span> SKUs matched</span>
+                      {batchStatus.matchedCount === 0 ? (
+                        <span className="text-yellow-400">
+                          No matching SKUs found in the product database.
+                        </span>
+                      ) : (
+                        <>
+                          <span className="text-emerald-400 font-semibold">
+                            {batchStatus.matchedCount}
+                          </span>
+                          <span> of </span>
+                          <span className="text-emerald-400 font-semibold">
+                            {batchStatus.skuCount}
+                          </span>
+                          <span> SKUs matched successfully</span>
+                        </>
+                      )}
                     </div>
 
                     {batchStatus.brandsFound.length > 0 && (
                       <div className="flex flex-wrap gap-2">
+                        <span className="text-slate-400 text-xs">Brands found:</span>
                         {batchStatus.brandsFound.map((brand) => (
                           <span
                             key={brand}
@@ -346,6 +401,9 @@ export default function SkuProcessor() {
                 <p className="text-slate-400 text-sm">
                   Enter SKUs and click Process to begin
                 </p>
+                <p className="text-slate-500 text-xs mt-2">
+                  SKUs will be matched against product database
+                </p>
               </div>
             </div>
           )}
@@ -372,21 +430,20 @@ export default function SkuProcessor() {
                   onClick={handleClearHistory}
                   className="text-xs text-slate-400 hover:text-slate-200 transition-colors px-2 py-1 rounded hover:bg-slate-800/50"
                 >
-                  Clear
+                  Clear All
                 </button>
               )}
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-700/50 bg-slate-800/20">
-                  <th className="px-6 py-3 text-left text-slate-400 font-medium text-xs uppercase tracking-wider">Date Imported</th>
+              <thead className="sticky top-0 bg-slate-800/90">
+                <tr className="border-b border-slate-700/50">
+                  <th className="px-6 py-3 text-left text-slate-400 font-medium text-xs uppercase tracking-wider">Date</th>
                   <th className="px-6 py-3 text-left text-slate-400 font-medium text-xs uppercase tracking-wider">Batch ID</th>
-                  <th className="px-6 py-3 text-left text-slate-400 font-medium text-xs uppercase tracking-wider">Filename</th>
-                  <th className="px-6 py-3 text-left text-slate-400 font-medium text-xs uppercase tracking-wider">Matched Items</th>
-                  <th className="px-6 py-3 text-left text-slate-400 font-medium text-xs uppercase tracking-wider">Progress</th>
+                  <th className="px-6 py-3 text-left text-slate-400 font-medium text-xs uppercase tracking-wider">Matched</th>
+                  <th className="px-6 py-3 text-left text-slate-400 font-medium text-xs uppercase tracking-wider">Brands</th>
                   <th className="px-6 py-3 text-left text-slate-400 font-medium text-xs uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-right text-slate-400 font-medium text-xs uppercase tracking-wider">Actions</th>
                 </tr>
@@ -395,21 +452,21 @@ export default function SkuProcessor() {
                 {filteredHistory.map((batch) => (
                   <tr key={batch.id} className="border-b border-slate-700/30 hover:bg-slate-800/20 transition-colors">
                     <td className="px-6 py-3 text-xs text-slate-300">{batch.dateImported}</td>
-                    <td className="px-6 py-3 text-xs font-mono text-emerald-400">{batch.id}</td>
-                    <td className="px-6 py-3 text-xs text-slate-300 max-w-xs truncate">{batch.filename || '-'}</td>
+                    <td className="px-6 py-3 text-xs font-mono text-emerald-400">{batch.id.slice(-12)}</td>
                     <td className="px-6 py-3 text-xs">
                       <span className="text-emerald-400 font-semibold">{batch.matchedCount}</span>
-                      <span className="text-slate-400"> of </span>
-                      <span className="text-emerald-400 font-semibold">{batch.skuCount}</span>
+                      <span className="text-slate-400"> / {batch.skuCount}</span>
                     </td>
                     <td className="px-6 py-3 text-xs">
-                      <div className="w-full max-w-xs bg-slate-700/30 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            batch.status === 'completed' ? 'bg-emerald-500' : batch.status === 'failed' ? 'bg-red-500' : 'bg-slate-600'
-                          }`}
-                          style={{ width: `${batch.progress}%` }}
-                        ></div>
+                      <div className="flex flex-wrap gap-1">
+                        {batch.brandsFound.slice(0, 2).map((brand) => (
+                          <span key={brand} className="text-xs px-1.5 py-0.5 bg-slate-700/50 rounded">
+                            {brand}
+                          </span>
+                        ))}
+                        {batch.brandsFound.length > 2 && (
+                          <span className="text-xs text-slate-400">+{batch.brandsFound.length - 2}</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-3">
@@ -420,13 +477,11 @@ export default function SkuProcessor() {
                     </td>
                     <td className="px-6 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button title="View details" className="p-1 hover:bg-slate-700/50 rounded transition-colors text-slate-400 hover:text-slate-200">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button title="Reprocess" className="p-1 hover:bg-slate-700/50 rounded transition-colors text-slate-400 hover:text-slate-200">
-                          <RefreshCw className="w-4 h-4" />
-                        </button>
-                        <button title="Delete" onClick={() => handleDeleteBatch(batch.id)} className="p-1 hover:bg-red-500/20 rounded transition-colors text-slate-400 hover:text-red-400">
+                        <button
+                          onClick={() => handleDeleteBatch(batch.id)}
+                          className="p-1 hover:bg-red-500/20 rounded transition-colors text-slate-400 hover:text-red-400"
+                          title="Delete batch"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
