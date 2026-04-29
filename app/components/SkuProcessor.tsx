@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
@@ -31,6 +32,7 @@ interface SkuBatchRow {
   status: BatchStatus;
   brands_found: string[] | null;
   filename: string | null;
+  export_path: string | null;
   error: string | null;
   created_at: string;
 }
@@ -130,7 +132,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
     const { data, error } = await supabase
       .from('sku_batches')
       .select(
-        'id, batch_id, sku_count, unique_sku_count, duplicate_count, matched_count, status, brands_found, filename, error, created_at'
+        'id, batch_id, sku_count, unique_sku_count, duplicate_count, matched_count, status, brands_found, filename, export_path, error, created_at'
       )
       .order('created_at', { ascending: false })
       .limit(50);
@@ -149,13 +151,14 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
   useEffect(() => {
     fetchBatches();
   }, []);
+
   const handleProcess = async () => {
     if (!hasValidSkus || isProcessing) {
       showFeedback('error', 'Please enter at least one valid SKU.');
       return;
     }
 
-    const batchId = `GD-${Math.floor(100000 + Math.random() * 899999)}`;
+    const batchId = `SC-${Math.floor(100000 + Math.random() * 899999)}`;
     const now = new Date().toISOString();
 
     const temporaryRow: SkuBatchRow = {
@@ -168,6 +171,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
       status: 'processing',
       brands_found: [],
       filename: 'shopkeep-consolidated-tool',
+      export_path: null,
       error: null,
       created_at: now,
     };
@@ -228,16 +232,31 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         throw new Error('The generated export file is empty.');
       }
 
-      const url = URL.createObjectURL(blob);
+      const exportPath = `sku-exports/${batchId}-${filename}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('exports')
+        .upload(exportPath, blob, {
+          contentType:
+            blob.type ||
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const localUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
 
-      anchor.href = url;
+      anchor.href = localUrl;
       anchor.download = filename;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
 
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(localUrl);
 
       const { data: insertedBatch, error: insertError } = await supabase
         .from('sku_batches')
@@ -250,9 +269,10 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           status: 'completed',
           brands_found: brands,
           filename,
+          export_path: exportPath,
         })
         .select(
-          'id, batch_id, sku_count, unique_sku_count, duplicate_count, matched_count, status, brands_found, filename, error, created_at'
+          'id, batch_id, sku_count, unique_sku_count, duplicate_count, matched_count, status, brands_found, filename, export_path, error, created_at'
         )
         .single();
 
@@ -271,6 +291,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         filename,
         metadata: {
           batchId,
+          exportPath,
           brandsFound: brands,
           duplicateCount: parsed.duplicateCount,
         },
@@ -306,10 +327,11 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           status: 'failed',
           brands_found: [],
           filename: 'shopkeep-consolidated-tool',
+          export_path: null,
           error: message,
         })
         .select(
-          'id, batch_id, sku_count, unique_sku_count, duplicate_count, matched_count, status, brands_found, filename, error, created_at'
+          'id, batch_id, sku_count, unique_sku_count, duplicate_count, matched_count, status, brands_found, filename, export_path, error, created_at'
         )
         .single();
 
@@ -353,6 +375,10 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
   };
 
   const handleDeleteBatch = async (batch: SkuBatchRow) => {
+    if (batch.export_path) {
+      await supabase.storage.from('exports').remove([batch.export_path]);
+    }
+
     if (batch.id.startsWith('temp-')) {
       setBatches((previous) => previous.filter((item) => item.id !== batch.id));
       return;
@@ -383,6 +409,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
       ['Matched SKUs', String(batch.matched_count)],
       ['Brands Found', (batch.brands_found ?? []).join(', ')],
       ['Filename', batch.filename ?? ''],
+      ['Export Path', batch.export_path ?? ''],
       ['Error', batch.error ?? ''],
     ];
 
@@ -445,7 +472,6 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         </div>
       )}
 
-      {/* Input Area */}
       <div className={`rounded-xl border p-5 shadow-lg ${pageBg}`}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex-1">
@@ -483,8 +509,16 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           <div className="w-full lg:w-72">
             <div className="mb-3 grid grid-cols-3 gap-2">
               <MiniStat label="Rows" value={parsed.rawSkus.length} theme={theme} />
-              <MiniStat label="Unique" value={parsed.uniqueSkus.length} theme={theme} />
-              <MiniStat label="Dupes" value={parsed.duplicateCount} theme={theme} />
+              <MiniStat
+                label="Unique"
+                value={parsed.uniqueSkus.length}
+                theme={theme}
+              />
+              <MiniStat
+                label="Dupes"
+                value={parsed.duplicateCount}
+                theme={theme}
+              />
             </div>
 
             <div className="flex gap-2">
@@ -544,7 +578,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           </div>
         </div>
       </div>
-      {/* Batch Table */}
+
       <div className={`overflow-hidden rounded-xl border shadow-lg ${pageBg}`}>
         <div
           className={`flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
@@ -717,27 +751,15 @@ function BatchTableRow({
         <input type="checkbox" className="h-4 w-4 rounded" />
       </td>
 
-      <td
-        className={`px-4 py-3 text-xs ${
-          isDark ? 'text-slate-200' : 'text-gray-700'
-        }`}
-      >
+      <td className={`px-4 py-3 text-xs ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
         {formatDateTime(batch.created_at)}
       </td>
 
-      <td
-        className={`px-4 py-3 text-xs ${
-          isDark ? 'text-slate-200' : 'text-gray-700'
-        }`}
-      >
+      <td className={`px-4 py-3 text-xs ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
         {formatDateTime(batch.created_at)}
       </td>
 
-      <td
-        className={`px-4 py-3 text-xs ${
-          isDark ? 'text-slate-100' : 'text-gray-800'
-        }`}
-      >
+      <td className={`px-4 py-3 text-xs ${isDark ? 'text-slate-100' : 'text-gray-800'}`}>
         <div className="flex items-center gap-2">
           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-700/50 text-[10px] text-white">
             T
@@ -746,11 +768,7 @@ function BatchTableRow({
         </div>
       </td>
 
-      <td
-        className={`px-4 py-3 font-mono text-xs ${
-          isDark ? 'text-slate-100' : 'text-gray-800'
-        }`}
-      >
+      <td className={`px-4 py-3 font-mono text-xs ${isDark ? 'text-slate-100' : 'text-gray-800'}`}>
         {batch.batch_id}
       </td>
 
@@ -787,6 +805,7 @@ function BatchTableRow({
               style={{ width: `${progress}%` }}
             />
           </div>
+
           <p className="mt-1 text-[10px] text-slate-300">
             {progress}% of {batch.sku_count} items
           </p>
@@ -833,7 +852,7 @@ function TableHead({
   children,
   alignRight = false,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   alignRight?: boolean;
 }) {
   return (
@@ -873,7 +892,7 @@ function ActionButton({
   onClick,
 }: {
   label: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   color: 'cyan' | 'red';
   onClick: () => void;
 }) {
@@ -913,18 +932,10 @@ function MiniStat({
           : 'border-gray-200 bg-gray-50'
       }`}
     >
-      <p
-        className={`text-[10px] uppercase ${
-          isDark ? 'text-slate-500' : 'text-gray-500'
-        }`}
-      >
+      <p className={`text-[10px] uppercase ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
         {label}
       </p>
-      <p
-        className={`text-sm font-semibold ${
-          isDark ? 'text-slate-100' : 'text-gray-900'
-        }`}
-      >
+      <p className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
         {value}
       </p>
     </div>
@@ -996,6 +1007,12 @@ function BatchDetailsModal({
                 </span>
               ))}
             </div>
+          </div>
+        )}
+
+        {batch.export_path && (
+          <div className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs text-cyan-300">
+            Export path: {batch.export_path}
           </div>
         )}
 
