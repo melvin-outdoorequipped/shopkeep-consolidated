@@ -12,6 +12,7 @@ export const brandConfigs = [
       description: "Item Name",
       name: "Shopkeep Name (Max Length: 35)",
       color: "Color Desc",
+      color_code:"Color Code",
       size: "Size",
       gender: "Gender"
     }
