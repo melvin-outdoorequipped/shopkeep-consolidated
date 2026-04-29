@@ -1,260 +1,474 @@
 'use client';
 
-import { useState } from 'react';
-import { Shield, FileText, Scale, Clock, Mail, CheckCircle, AlertCircle } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  FileText,
+  Mail,
+  Scale,
+  Shield,
+} from 'lucide-react';
 
 interface TermsProps {
   theme?: 'light' | 'dark';
 }
 
-export default function Terms({ theme = 'dark' }: TermsProps) {
-  const [showFullTerms, setShowFullTerms] = useState(false);
-  const isDark = theme === 'dark';
+interface TermsSection {
+  id: string;
+  title: string;
+  summary: string;
+  icon: React.ReactNode;
+  content: string;
+}
 
-  const sections = [
-    {
-      id: 'acceptance',
-      title: 'Acceptance of Terms',
-      icon: <CheckCircle className="w-5 h-5" />,
-      content: `By accessing and using TARA (Listing Operations Tool), you agree to be bound by these Terms and Conditions. If you do not agree with any part of these terms, please do not use our tools.
+const LAST_UPDATED = 'April 29, 2026';
 
-We reserve the right to modify these terms at any time. Your continued use of the tool after any changes indicates your acceptance of the modified terms.`
-    },
-    {
-      id: 'use-of-tools',
-      title: 'Use of Tools',
-      icon: <Scale className="w-5 h-5" />,
-      content: `You agree to use TARA tools only for legitimate business purposes related to Amazon listing management. You shall not:
+const sections: TermsSection[] = [
+  {
+    id: 'acceptance',
+    title: 'Acceptance of Terms',
+    summary: 'Your agreement to use TARA under these terms.',
+    icon: <CheckCircle className="h-5 w-5" />,
+    content: `By accessing and using TARA, also known as the Listing Operations Tool, you agree to be bound by these Terms and Conditions. If you do not agree with any part of these terms, please do not use the tools.
 
-• Use the tools for any illegal purposes
-• Attempt to reverse engineer or decompile the tools
-• Use automated scripts or bots to access the tools
+We reserve the right to modify these terms from time to time. Your continued use of the tool after changes are posted or communicated indicates your acceptance of the updated terms.`,
+  },
+  {
+    id: 'use-of-tools',
+    title: 'Use of Tools',
+    summary: 'Permitted and prohibited use of the platform.',
+    icon: <Scale className="h-5 w-5" />,
+    content: `You agree to use TARA only for legitimate business purposes related to listing operations, catalog management, and marketplace data review.
+
+You shall not:
+• Use the tools for illegal, abusive, or unauthorized purposes
+• Attempt to reverse engineer, decompile, or bypass tool restrictions
+• Use automated scripts or bots without authorization
 • Interfere with or disrupt the operation of the tools
-• Upload malicious code or harmful data
+• Upload malicious code, harmful files, or intentionally corrupted data
 • Share access credentials with unauthorized users
 
-The tools are provided for internal business use only and may not be resold or redistributed.`
-    },
-    {
-      id: 'data-processing',
-      title: 'Data Processing & Privacy',
-      icon: <Shield className="w-5 h-5" />,
-      content: `Important Information About Your Data:
+The tools are provided for approved internal business use and may not be resold, redistributed, or made available to unauthorized third parties.`,
+  },
+  {
+    id: 'data-processing',
+    title: 'Data Processing & Privacy',
+    summary: 'How data may be handled while using TARA.',
+    icon: <Shield className="h-5 w-5" />,
+    content: `Important information about your data:
 
-• All data processing occurs locally in your browser
-• We do not store, transmit, or have access to your data
-• No data is collected for analytics or tracking
-• Your information never leaves your computer
-• Results are generated locally and can be exported at your discretion
+• Some tools may process data locally in your browser
+• Tools that require server-side processing may send data to approved internal API endpoints
+• Exported files are generated for user download
+• Users are responsible for reviewing, securing, and deleting exported files when no longer needed
+• Sensitive or confidential data should only be processed when authorized
 
 You are responsible for:
 • The accuracy of the data you input
-• Compliance with data protection laws (GDPR, CCPA, etc.)
-• Securing any exported files containing sensitive information
-• Properly deleting sensitive data after use
+• Compliance with applicable data protection and company policies
+• Securing exported files that may contain sensitive information
+• Clearing input data after each session when appropriate
 
-We recommend clearing your browser cache and using the "Clear" button after each session.`
-    },
-    {
-      id: 'intellectual-property',
-      title: 'Intellectual Property',
-      icon: <FileText className="w-5 h-5" />,
-      content: `All content, features, and functionality of TARA tools, including but not limited to the user interface, design, source code, and documentation, are owned by the company and are protected by copyright, trademark, and other intellectual property laws.
+We recommend using the Clear button after processing sensitive information and following your company’s data handling policies.`,
+  },
+  {
+    id: 'intellectual-property',
+    title: 'Intellectual Property',
+    summary: 'Ownership and restrictions related to the tool.',
+    icon: <FileText className="h-5 w-5" />,
+    content: `All content, features, and functionality of TARA, including the user interface, design, source code, workflows, and documentation, are owned by the company or its authorized owners and may be protected by copyright, trademark, and other intellectual property laws.
 
 You may not:
 • Copy, modify, or create derivative works of the tools
-• Remove any copyright or other proprietary notices
-• Use the company's name or logos without permission
-• Frame or mirror any part of the tools
+• Remove copyright or proprietary notices
+• Use company names, marks, or logos without permission
+• Frame, mirror, or redistribute any part of the tools
 
-The tools are licensed, not sold, to you for use under these Terms.`
-    },
-    {
-      id: 'disclaimers',
-      title: 'Disclaimers',
-      icon: <AlertCircle className="w-5 h-5" />,
-      content: `THE TOOLS ARE PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+The tools are licensed for approved use and are not sold to users.`,
+  },
+  {
+    id: 'disclaimers',
+    title: 'Disclaimers',
+    summary: 'Limitations on warranties and tool accuracy.',
+    icon: <AlertCircle className="h-5 w-5" />,
+    content: `The tools are provided “as is” and “as available” without warranties of any kind, whether express or implied.
 
 We do not warrant that:
-• The tools will meet your specific requirements
+• The tools will meet every specific requirement
 • The tools will be uninterrupted, timely, secure, or error-free
-• Results obtained will be accurate or reliable
-• Any errors in the tools will be corrected
+• Results will always be accurate, complete, or reliable
+• Any issues or defects will be corrected immediately
 
-You assume all responsibility and risk for your use of the tools. We are not responsible for any direct, indirect, incidental, consequential, or punitive damages arising from your use of the tools.
+You are responsible for reviewing outputs before relying on them for business decisions. TARA assists with data analysis but does not guarantee listing performance, marketplace compliance, or commercial results.`,
+  },
+  {
+    id: 'limitations',
+    title: 'Limitations of Liability',
+    summary: 'Limits on responsibility for damages or losses.',
+    icon: <Clock className="h-5 w-5" />,
+    content: `To the maximum extent permitted by applicable law, the company shall not be liable for damages arising from the use or inability to use TARA, including loss of profits, business interruption, data loss, or other commercial damages.
 
-The tools assist in data analysis but do not guarantee listing performance or success on Amazon or other marketplaces.`
-    },
-    {
-      id: 'limitations',
-      title: 'Limitations of Liability',
-      icon: <Clock className="w-5 h-5" />,
-      content: `To the maximum extent permitted by law, in no event shall the company be liable for any damages whatsoever (including, without limitation, damages for loss of profits, business interruption, loss of information) arising out of the use or inability to use the tools, even if we have been advised of the possibility of such damages.
+Where liability cannot be excluded, the company’s total liability shall be limited to the maximum extent permitted by law.
 
-Our total liability to you for all claims arising from or related to these terms or your use of the tools shall not exceed the amount paid by you, if any, for accessing the tools (which is currently free of charge).
+Some jurisdictions do not allow certain warranty exclusions or liability limitations, so some limitations may not apply to every user.`,
+  },
+  {
+    id: 'governing-law',
+    title: 'Governing Law',
+    summary: 'Legal jurisdiction and dispute handling.',
+    icon: <Scale className="h-5 w-5" />,
+    content: `These Terms shall be governed by the laws of the applicable jurisdiction in which the company operates, without regard to conflict of law provisions.
 
-Some jurisdictions do not allow the exclusion of certain warranties or the limitation of liability for incidental or consequential damages, so some of these limitations may not apply to you.`
-    },
-    {
-      id: 'governing-law',
-      title: 'Governing Law',
-      icon: <Mail className="w-5 h-5" />,
-      content: `These Terms shall be governed by and construed in accordance with the laws of the jurisdiction in which the company operates, without regard to its conflict of law provisions.
+Any dispute, claim, or proceeding related to these Terms or the use of the tools shall be handled according to applicable company policy, contract terms, or legal requirements.
 
-Any legal suit, action, or proceeding arising out of, or related to, these Terms or the tools shall be instituted exclusively in the courts of the applicable jurisdiction. You waive any and all objections to the exercise of jurisdiction over you by such courts and to venue in such courts.
+Users should contact the appropriate internal department for questions related to jurisdiction, compliance, or legal interpretation.`,
+  },
+  {
+    id: 'contact',
+    title: 'Contact Information',
+    summary: 'Where to get support or ask questions.',
+    icon: <Mail className="h-5 w-5" />,
+    content: `If you have questions about these Terms, contact your system administrator, manager, or internal support channel.
 
-You agree that any claim or cause of action arising out of or related to use of the tools or these Terms must be filed within one (1) year after such claim or cause of action arose.`
-    },
-    {
-      id: 'contact',
-      title: 'Contact Information',
-      icon: <Mail className="w-5 h-5" />,
-      content: `If you have any questions about these Terms, please contact us through your system administrator or internal support channels.
+For technical issues or feature requests:
+• Submit a ticket through your company’s IT support system
+• Include screenshots, sample file structure, and error messages when possible
+• Avoid sharing confidential data unless required and approved
 
-For technical issues or feature requests, please submit a ticket through your company's IT support system.
+Support response times may vary depending on internal procedures and issue priority.`,
+  },
+];
 
-Business Hours Support:
-• Monday - Friday: 9:00 AM - 6:00 PM (EST)
-• Response time: Within 24-48 hours
+export default function Terms({ theme = 'dark' }: TermsProps) {
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [activeSection, setActiveSection] = useState(sections[0].id);
 
-Emergency Issues:
-• Critical system issues should be reported immediately to your IT department
-• For urgent matters, use internal communication channels
+  const isDark = theme === 'dark';
 
-We strive to respond to all inquiries within 2 business days.`
-    }
-  ];
+  const activeSectionData = useMemo(() => {
+    return sections.find((section) => section.id === activeSection) ?? sections[0];
+  }, [activeSection]);
+
+  const cardClass = isDark
+    ? 'bg-slate-900/50 border-slate-700/50'
+    : 'bg-white/70 border-gray-300/60';
+
+  const sectionClass = isDark
+    ? 'bg-slate-800/30 border-slate-700/50'
+    : 'bg-gray-50/80 border-gray-200';
+
+  const strongTextClass = isDark ? 'text-white' : 'text-gray-900';
+  const mutedTextClass = isDark ? 'text-slate-400' : 'text-gray-600';
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="flex h-full w-full flex-col">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h1 className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Terms & Conditions
-            </h1>
-            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
-              Last updated: January 1, 2026
-            </p>
-          </div>
+        <div>
+          <h1 className={`mb-1 text-2xl font-bold ${strongTextClass}`}>
+            Terms & Conditions
+          </h1>
+          <p className={`text-sm ${mutedTextClass}`}>
+            Last updated: {LAST_UPDATED}
+          </p>
         </div>
 
         {/* Notice Banner */}
-        <div className={`mt-4 p-4 rounded-lg border ${
-          isDark 
-            ? 'bg-emerald-600/10 border-emerald-500/20 text-emerald-400' 
-            : 'bg-emerald-100 border-emerald-300 text-emerald-800'
-        }`}>
+        <div
+          className={`mt-4 rounded-xl border p-4 ${
+            isDark
+              ? 'border-emerald-500/20 bg-emerald-600/10 text-emerald-400'
+              : 'border-emerald-300 bg-emerald-100 text-emerald-800'
+          }`}
+        >
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
             <div>
-              <p className="text-sm font-medium mb-1">Please Read Carefully</p>
+              <p className="mb-1 text-sm font-medium">Please read carefully</p>
               <p className="text-xs opacity-90">
-                By using TARA tools, you acknowledge that you have read, understood, and agree to be bound by these terms.
-                If you do not agree with any part of these terms, please discontinue use immediately.
+                By using TARA tools, you acknowledge that you have read,
+                understood, and agree to be bound by these terms. If you do not
+                agree, discontinue use of the tools.
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className={`flex-1 rounded-lg border overflow-auto ${
-        isDark 
-          ? 'bg-slate-900/50 border-slate-700/50' 
-          : 'bg-white/50 border-gray-300/50'
-      }`}>
-        <div className="p-6 space-y-6">
-          {sections.map((section) => (
-            <div
-              key={section.id}
-              id={section.id}
-              className={`p-6 rounded-lg border ${
-                isDark 
-                  ? 'bg-slate-800/30 border-slate-700/50' 
-                  : 'bg-gray-50/50 border-gray-200'
+      {/* Main Layout */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-[18rem_1fr]">
+        {/* Sidebar */}
+        <aside className={`overflow-hidden rounded-xl border ${cardClass}`}>
+          <div
+            className={`border-b p-4 ${
+              isDark ? 'border-slate-700/50' : 'border-gray-200'
+            }`}
+          >
+            <h2
+              className={`text-xs font-semibold uppercase tracking-wider ${
+                isDark ? 'text-slate-400' : 'text-gray-500'
               }`}
             >
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`p-2 rounded-lg ${
-                  isDark ? 'bg-emerald-600/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
-                }`}>
-                  {section.icon}
-                </div>
-                <h2 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  {section.title}
-                </h2>
-              </div>
-              <div className={`prose max-w-none ${isDark ? 'prose-invert' : ''}`}>
-                {section.content.split('\n\n').map((paragraph, idx) => {
-                  if (paragraph.includes('•')) {
-                    return (
-                      <ul key={idx} className={`list-disc pl-6 mb-4 space-y-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                        {paragraph.split('•').filter(item => item.trim()).map((item, itemIdx) => (
-                          <li key={itemIdx} className="text-sm">
-                            {item.trim()}
-                          </li>
-                        ))}
-                      </ul>
-                    );
-                  }
-                  return (
-                    <p key={idx} className={`text-sm leading-relaxed mb-4 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                      {paragraph}
-                    </p>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          {/* Acknowledgment Section */}
-          <div className={`p-6 rounded-lg border-2 ${
-            isDark 
-              ? 'bg-yellow-600/10 border-yellow-500/30' 
-              : 'bg-yellow-100 border-yellow-300'
-          }`}>
-            <div className="flex items-start gap-3">
-              <div className={`p-2 rounded-lg flex-shrink-0 ${
-                isDark ? 'bg-yellow-600/20' : 'bg-yellow-200'
-              }`}>
-                <Shield className={`w-5 h-5 ${isDark ? 'text-yellow-400' : 'text-yellow-700'}`} />
-              </div>
-              <div>
-                <h3 className={`font-semibold mb-2 ${isDark ? 'text-yellow-400' : 'text-yellow-800'}`}>
-                  Acknowledgment of Terms
-                </h3>
-                <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                  By continuing to use TARA tools, you acknowledge that you have read these Terms & Conditions,
-                  understand them, and agree to be bound by them. You also agree to comply with all applicable
-                  laws and regulations regarding your use of the tools.
-                </p>
-                <div className="mt-4 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="acknowledge"
-                    className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                    onChange={(e) => setShowFullTerms(e.target.checked)}
-                  />
-                  <label htmlFor="acknowledge" className={`text-sm ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                    I acknowledge and agree to the Terms & Conditions
-                  </label>
-                </div>
-              </div>
-            </div>
+              Sections
+            </h2>
           </div>
-        </div>
+
+          <nav className="max-h-[32rem] overflow-y-auto p-3">
+            <div className="space-y-1">
+              {sections.map((section) => {
+                const active = activeSection === section.id;
+
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveSection(section.id)}
+                    className={`flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/70 ${
+                      active
+                        ? isDark
+                          ? 'border-l-2 border-emerald-500 bg-emerald-600/20 text-emerald-400'
+                          : 'border-l-2 border-emerald-500 bg-emerald-100 text-emerald-700'
+                        : isDark
+                          ? 'text-slate-300 hover:bg-slate-800/50'
+                          : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span className="mt-0.5 flex-shrink-0">{section.icon}</span>
+                    <span>
+                      <span className="block text-sm font-medium">
+                        {section.title}
+                      </span>
+                      <span
+                        className={`mt-0.5 line-clamp-2 block text-xs ${
+                          isDark ? 'text-slate-500' : 'text-gray-500'
+                        }`}
+                      >
+                        {section.summary}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </aside>
+
+        {/* Content */}
+        <main className={`min-h-[34rem] overflow-auto rounded-xl border ${cardClass}`}>
+          <article className="p-6">
+            <div className={`rounded-xl border p-6 ${sectionClass}`}>
+              <div className="mb-4 flex items-center gap-3">
+                <div
+                  className={`rounded-lg p-2 ${
+                    isDark
+                      ? 'bg-emerald-600/20 text-emerald-400'
+                      : 'bg-emerald-100 text-emerald-700'
+                  }`}
+                >
+                  {activeSectionData.icon}
+                </div>
+
+                <div>
+                  <h2 className={`text-lg font-bold ${strongTextClass}`}>
+                    {activeSectionData.title}
+                  </h2>
+                  <p className={`mt-1 text-sm ${mutedTextClass}`}>
+                    {activeSectionData.summary}
+                  </p>
+                </div>
+              </div>
+
+              <TermsContent content={activeSectionData.content} isDark={isDark} />
+            </div>
+
+            {/* Acknowledgment */}
+            <div
+              className={`mt-6 rounded-xl border-2 p-6 ${
+                acknowledged
+                  ? isDark
+                    ? 'border-emerald-500/30 bg-emerald-600/10'
+                    : 'border-emerald-300 bg-emerald-100'
+                  : isDark
+                    ? 'border-yellow-500/30 bg-yellow-600/10'
+                    : 'border-yellow-300 bg-yellow-100'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={`flex-shrink-0 rounded-lg p-2 ${
+                    acknowledged
+                      ? isDark
+                        ? 'bg-emerald-600/20'
+                        : 'bg-emerald-200'
+                      : isDark
+                        ? 'bg-yellow-600/20'
+                        : 'bg-yellow-200'
+                  }`}
+                >
+                  <Shield
+                    className={`h-5 w-5 ${
+                      acknowledged
+                        ? isDark
+                          ? 'text-emerald-400'
+                          : 'text-emerald-700'
+                        : isDark
+                          ? 'text-yellow-400'
+                          : 'text-yellow-700'
+                    }`}
+                  />
+                </div>
+
+                <div className="flex-1">
+                  <h3
+                    className={`mb-2 font-semibold ${
+                      acknowledged
+                        ? isDark
+                          ? 'text-emerald-400'
+                          : 'text-emerald-800'
+                        : isDark
+                          ? 'text-yellow-400'
+                          : 'text-yellow-800'
+                    }`}
+                  >
+                    Acknowledgment of Terms
+                  </h3>
+
+                  <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                    By continuing to use TARA tools, you acknowledge that you
+                    have read these Terms & Conditions, understand them, and
+                    agree to comply with applicable policies and regulations.
+                  </p>
+
+                  <div className="mt-4 flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      id="acknowledge"
+                      checked={acknowledged}
+                      onChange={(event) => setAcknowledged(event.target.checked)}
+                      className="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <label
+                      htmlFor="acknowledge"
+                      className={`text-sm ${
+                        isDark ? 'text-slate-300' : 'text-gray-700'
+                      }`}
+                    >
+                      I acknowledge and agree to the Terms & Conditions.
+                    </label>
+                  </div>
+
+                  {acknowledged && (
+                    <div
+                      className={`mt-4 rounded-lg border px-3 py-2 text-xs ${
+                        isDark
+                          ? 'border-emerald-500/20 bg-emerald-600/10 text-emerald-400'
+                          : 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                      }`}
+                    >
+                      Acknowledgment recorded for this session.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </article>
+        </main>
       </div>
 
       {/* Footer */}
-      <div className="mt-6 pt-4 border-t">
-        <p className={`text-xs text-center ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+      <div
+        className={`mt-6 border-t pt-4 ${
+          isDark ? 'border-slate-700/50' : 'border-gray-200'
+        }`}
+      >
+        <p className={`text-center text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
           © {new Date().getFullYear()} TARA - Listing Operations Tool. All rights reserved.
           <br />
-          These terms constitute the entire agreement between you and the company regarding the use of our tools.
+          These terms summarize the conditions for using TARA tools.
         </p>
       </div>
+    </div>
+  );
+}
+
+function TermsContent({
+  content,
+  isDark,
+}: {
+  content: string;
+  isDark: boolean;
+}) {
+  const blocks = content.split('\n\n');
+
+  return (
+    <div className="max-w-none">
+      {blocks.map((block, index) => {
+        const lines = block.split('\n');
+        const heading = lines[0];
+        const rest = lines.slice(1);
+
+        const isHeadingBlock = heading.endsWith(':') && rest.length > 0;
+        const bulletLines = rest.filter((line) => line.trim().startsWith('•'));
+
+        if (isHeadingBlock && bulletLines.length > 0) {
+          return (
+            <section key={`${heading}-${index}`} className="mb-6">
+              <h3
+                className={`mb-3 text-sm font-semibold ${
+                  isDark ? 'text-emerald-400' : 'text-emerald-700'
+                }`}
+              >
+                {heading}
+              </h3>
+
+              <ul
+                className={`list-disc space-y-2 pl-6 text-sm leading-relaxed ${
+                  isDark ? 'text-slate-300' : 'text-gray-700'
+                }`}
+              >
+                {bulletLines.map((line) => (
+                  <li key={line}>{line.replace('•', '').trim()}</li>
+                ))}
+              </ul>
+            </section>
+          );
+        }
+
+        if (isHeadingBlock) {
+          return (
+            <section key={`${heading}-${index}`} className="mb-6">
+              <h3
+                className={`mb-3 text-sm font-semibold ${
+                  isDark ? 'text-emerald-400' : 'text-emerald-700'
+                }`}
+              >
+                {heading}
+              </h3>
+
+              <p
+                className={`text-sm leading-7 ${
+                  isDark ? 'text-slate-300' : 'text-gray-700'
+                }`}
+              >
+                {rest.join(' ')}
+              </p>
+            </section>
+          );
+        }
+
+        return (
+          <p
+            key={`${block.slice(0, 20)}-${index}`}
+            className={`mb-5 text-sm leading-7 ${
+              isDark ? 'text-slate-300' : 'text-gray-700'
+            }`}
+          >
+            {block}
+          </p>
+        );
+      })}
     </div>
   );
 }

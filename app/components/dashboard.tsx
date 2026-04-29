@@ -1,354 +1,401 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Activity,
+  AlertCircle,
+  CheckCircle2,
+  Database,
+  FileWarning,
+  Loader2,
+  RefreshCw,
+  SearchCheck,
+  Zap,
+} from 'lucide-react';
+
+import { supabase } from '@/lib/supabase/client';
 
 interface DashboardProps {
-  theme: 'light' | 'dark';
+  theme?: 'light' | 'dark';
 }
 
-interface Tool {
+interface ToolRun {
   id: string;
-  name: string;
-  description: string;
-  icon: string;
-  status: 'active' | 'beta' | 'coming-soon';
-  usageCount: number;
-}
-
-interface CarouselImage {
-  id: number;
-  url: string;
+  tool_type: 'sku' | 'asin';
+  status: 'completed' | 'failed' | 'warning';
   title: string;
-  description: string;
-  name: string;
-  role: string;
+  description: string | null;
+  total_count: number;
+  success_count: number;
+  issue_count: number;
+  filename: string | null;
+  created_at: string;
 }
 
-export default function Dashboard({ theme }: DashboardProps) {
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [tools] = useState<Tool[]>([
-    {
-      id: 'sku',
-      name: 'Shopkeep Consolidated Tool',
-      description: 'Process and consolidate SKU data efficiently',
-      icon: '📦',
-      status: 'beta',
-      usageCount: 0
-    },
-    {
-      id: 'asin',
-      name: 'Multiple Parent ASIN Checker',
-      description: 'Check and validate ASIN conflicts across parent products',
-      icon: '🔍',
-      status: 'active',
-      usageCount: 0
-    }
-  ]);
+export default function Dashboard({ theme = 'dark' }: DashboardProps) {
+  const [runs, setRuns] = useState<ToolRun[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // Team member photos with fixed dimensions
-  const carouselImages: CarouselImage[] = [
-    {
-      id: 1,
-      url: 'https://cdn.phototourl.com/free/2026-04-28-bac9b7bc-e97d-47da-942d-cd33ecfab89d.png',
-      title: 'Listing Ops',
-      description: 'No desc',
-      name: 'Juday',
-      role: 'Data Analyst'
-    },
-    {
-      id: 2,
-      url: 'https://i.postimg.cc/25KfQYdg/Screenshot-2026-04-17-041943.png',
-      title: 'Listing Ops',
-      description: 'No Desc',
-      name: 'Jan2x',
-      role: 'Data Analyst'
-    },
-    {
-      id: 3,
-      url: 'https://cdn.phototourl.com/free/2026-04-28-f315ed86-c7f3-4583-ae7e-fe36ab8690ed.png',
-      title: 'Listing Ops',
-      description: 'apo',
-      name: 'Melvs',
-      role: 'Data Analyst'
-    },
-    {
-      id: 4,
-      url: 'https://cdn.phototourl.com/free/2026-04-28-0053da24-c3e1-475d-a4ce-f72704342534.png',
-      title: 'Listing Ops',
-      description: 'No desc',
-      name: 'JOns',
-      role: 'Data Analyst'
-    },
-    {
-      id: 5,
-      url: 'https://cdn.phototourl.com/free/2026-04-29-69da0659-11bc-4ada-a133-71b5843cef46.png',
-      title: 'Listing Ops',
-      description: 'No desc',
-      name: 'Ashlie',
-      role: 'Data Analyst'
-    },
-    {
-      id: 6,
-      url: 'https://cdn.phototourl.com/free/2026-04-29-930ed2af-75a0-4ace-8e6a-a7de32e5afa2.png',
-      title: 'Listing Ops',
-      description: 'No desc',
-      name: 'lorens',
-      role: 'Data Analyst'
-    },
-    {
-      id: 7,
-      url: 'https://cdn.phototourl.com/free/2026-04-29-3e0567f4-9afb-4991-a154-bc57a094a4db.png',
-      title: 'Listing Ops',
-      description: 'No desc',
-      name: 'mark',
-      role: 'Data Analyst'
-    },
-    {
-      id: 8,
-      url: 'https://cdn.phototourl.com/free/2026-04-29-056a0bbf-227c-4a02-b24c-9362410b6273.png',
-      title: 'Listing Ops',
-      description: 'No desc',
-      name: 'Rich Chards',
-      role: 'Data Analyst'
-    }
-  ];
+  const isDark = theme === 'dark';
 
-  // Auto-advance carousel every 5 seconds
+  const fetchDashboardData = async () => {
+    setIsLoading(true);
+    setErrorMessage('');
+
+    const { data, error } = await supabase
+      .from('tool_runs')
+      .select(
+        'id, tool_type, status, title, description, total_count, success_count, issue_count, filename, created_at'
+      )
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error(error);
+      setRuns([]);
+      setErrorMessage(error.message);
+    } else {
+      setRuns((data ?? []) as ToolRun[]);
+    }
+
+    setIsLoading(false);
+  };
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % carouselImages.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [carouselImages.length]);
+    fetchDashboardData();
+  }, []);
 
-  const goToSlide = (index: number) => {
-    setCurrentSlide(index);
+  const stats = useMemo(() => {
+    const totalRuns = runs.length;
+    const skuRuns = runs.filter((run) => run.tool_type === 'sku').length;
+    const asinRuns = runs.filter((run) => run.tool_type === 'asin').length;
+    const failedRuns = runs.filter((run) => run.status === 'failed').length;
+    const issuesFound = runs.reduce(
+      (sum, run) => sum + Number(run.issue_count ?? 0),
+      0
+    );
+    const totalProcessed = runs.reduce(
+      (sum, run) => sum + Number(run.total_count ?? 0),
+      0
+    );
+
+    return {
+      totalRuns,
+      skuRuns,
+      asinRuns,
+      failedRuns,
+      issuesFound,
+      totalProcessed,
+    };
+  }, [runs]);
+
+  const navigateToTool = (toolId: 'sku' | 'asin') => {
+    window.dispatchEvent(
+      new CustomEvent('navigateToTool', {
+        detail: { toolId },
+      })
+    );
   };
 
-  const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % carouselImages.length);
-  };
+  const cardClass = isDark
+    ? 'border-slate-700/50 bg-slate-900/50'
+    : 'border-gray-200 bg-white/80';
 
-  const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + carouselImages.length) % carouselImages.length);
-  };
+  const panelClass = isDark
+    ? 'border-slate-700/50 bg-gradient-to-br from-[#1E293B] to-[#0F172A]'
+    : 'border-gray-200 bg-white/80';
 
-  const handleLaunchTool = (toolId: string) => {
-    window.dispatchEvent(new CustomEvent('navigateToTool', { detail: { toolId } }));
-  };
-
-  const getToolStatusBadge = (status: string) => {
-    switch(status) {
-      case 'active':
-        return <span className="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400">Active</span>;
-      case 'beta':
-        return <span className="text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-400">Beta</span>;
-      case 'coming-soon':
-        return <span className="text-xs px-2 py-1 rounded-full bg-gray-500/20 text-gray-400">Coming Soon</span>;
-      default:
-        return null;
-    }
-  };
+  const strongTextClass = isDark ? 'text-white' : 'text-gray-900';
+  const mutedTextClass = isDark ? 'text-slate-400' : 'text-gray-500';
 
   return (
     <div className="space-y-6">
-      {/* Listing Ops Team Header */}
-      <div className="mb-8 text-center">
-        <div className="inline-flex items-center justify-center gap-3 mb-3">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-            theme === 'dark' ? 'bg-emerald-600/20' : 'bg-emerald-100'
-          }`}>
-            <span className="text-2xl">👥</span>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className={`text-2xl font-bold ${strongTextClass}`}>
+            Operations Dashboard
+          </h1>
+          <p className={`mt-1 text-sm ${mutedTextClass}`}>
+            Monitor SKU processing, ASIN checks, recent activity, and tool usage.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={fetchDashboardData}
+          disabled={isLoading}
+          className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+            isDark
+              ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800 hover:text-white'
+              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          Refresh
+        </button>
+      </div>
+
+      {errorMessage && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            isDark
+              ? 'border-red-500/30 bg-red-600/10 text-red-400'
+              : 'border-red-300 bg-red-100 text-red-700'
+          }`}
+        >
+          Supabase error: {errorMessage}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          theme={theme}
+          icon={<Activity className="h-5 w-5" />}
+          label="Total Runs"
+          value={stats.totalRuns}
+          description="Latest saved tool activities"
+          color="emerald"
+        />
+        <MetricCard
+          theme={theme}
+          icon={<Database className="h-5 w-5" />}
+          label="Processed Items"
+          value={stats.totalProcessed}
+          description="Total SKU rows / ASIN pairs"
+          color="blue"
+        />
+        <MetricCard
+          theme={theme}
+          icon={<FileWarning className="h-5 w-5" />}
+          label="Issues Found"
+          value={stats.issuesFound}
+          description="Duplicates, conflicts, or warnings"
+          color="yellow"
+        />
+        <MetricCard
+          theme={theme}
+          icon={<AlertCircle className="h-5 w-5" />}
+          label="Failed Runs"
+          value={stats.failedRuns}
+          description="Runs that returned errors"
+          color="red"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div className={`rounded-xl border p-6 shadow-lg xl:col-span-1 ${panelClass}`}>
+          <h2 className={`mb-4 text-lg font-semibold ${strongTextClass}`}>
+            Quick Actions
+          </h2>
+
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => navigateToTool('sku')}
+              className="flex w-full items-center justify-between rounded-xl bg-emerald-600 px-4 py-3 text-left text-white transition-colors hover:bg-emerald-500"
+            >
+              <span>
+                <span className="block text-sm font-semibold">Process SKUs</span>
+                <span className="text-xs text-emerald-100">
+                  Consolidate and export matched SKUs.
+                </span>
+              </span>
+              <Zap className="h-5 w-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigateToTool('asin')}
+              className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${
+                isDark
+                  ? 'border-slate-700 bg-slate-800/50 text-slate-200 hover:bg-slate-800'
+                  : 'border-gray-200 bg-gray-50 text-gray-800 hover:bg-gray-100'
+              }`}
+            >
+              <span>
+                <span className="block text-sm font-semibold">
+                  Check ASIN Conflicts
+                </span>
+                <span className={`text-xs ${mutedTextClass}`}>
+                  Find styles with multiple parent ASINs.
+                </span>
+              </span>
+              <SearchCheck className="h-5 w-5 text-emerald-500" />
+            </button>
           </div>
-          <div>
-            <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-              Listing Ops Team
-            </h1>
-            <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>
-              Meet the people behind your listing operations
+
+          <div className={`mt-6 rounded-xl border p-4 ${cardClass}`}>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <span className={`text-sm font-medium ${strongTextClass}`}>
+                Tools ready
+              </span>
+            </div>
+            <p className={`mt-1 text-xs ${mutedTextClass}`}>
+              Dashboard data is pulled from Supabase activity logs.
             </p>
           </div>
         </div>
-        <p className={`text-sm max-w-2xl mx-auto ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>
-          Our dedicated team works tirelessly to ensure your listing operations run smoothly and efficiently.
-        </p>
-      </div>
 
-      {/* Team Member Carousel Section */}
-      <div className="mb-8">
-        <h2 className={`text-xl font-semibold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-          Meet Our Team
-        </h2>
-        
-        <div className="relative max-w-md mx-auto">
-          {/* Carousel Container - Fixed width container */}
-          <div className="relative overflow-hidden rounded-xl shadow-2xl" style={{ maxWidth: '213px', margin: '0 auto' }}>
-            <div 
-              className="flex transition-transform duration-500 ease-out"
-              style={{ transform: `translateX(-${currentSlide * 100}%)` }}
-            >
-              {carouselImages.map((image) => (
-                <div key={image.id} className="w-full flex-shrink-0 relative">
-                  <div className="relative" style={{ width: '213px', height: '345px' }}>
-                    <img
-                      src={image.url}
-                      alt={image.name}
-                      className="w-full h-full object-cover"
-                      style={{ width: '213px', height: '345px', objectFit: 'cover' }}
-                    />
-                    {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
-                    
-                    {/* Team Member Info Card */}
-                    <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                      <h3 className="text-base font-bold mb-1">{image.name}</h3>
-                      <p className="text-emerald-400 font-medium text-xs mb-1">{image.role}</p>
-                      <p className="text-xs text-gray-200">{image.description}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Navigation Buttons */}
-            <button
-              onClick={prevSlide}
-              className={`absolute left-2 top-1/2 -translate-y-1/2 p-1 rounded-full transition-all duration-200 hover:scale-110 ${
-                theme === 'dark'
-                  ? 'bg-black/50 hover:bg-black/70 text-white'
-                  : 'bg-white/50 hover:bg-white/70 text-gray-900'
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button
-              onClick={nextSlide}
-              className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full transition-all duration-200 hover:scale-110 ${
-                theme === 'dark'
-                  ? 'bg-black/50 hover:bg-black/70 text-white'
-                  : 'bg-white/50 hover:bg-white/70 text-gray-900'
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-
-            {/* Dots Indicator */}
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-              {carouselImages.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => goToSlide(index)}
-                  className={`transition-all duration-200 rounded-full ${
-                    currentSlide === index
-                      ? 'w-6 h-1.5 bg-white'
-                      : 'w-1.5 h-1.5 bg-white/50 hover:bg-white/75'
-                  }`}
-                />
-              ))}
-            </div>
+        <div className={`rounded-xl border shadow-lg xl:col-span-2 ${panelClass}`}>
+          <div
+            className={`border-b px-6 py-4 ${
+              isDark ? 'border-slate-700/50' : 'border-gray-200'
+            }`}
+          >
+            <h2 className={`font-semibold ${strongTextClass}`}>
+              Recent Activity
+            </h2>
+            <p className={`text-xs ${mutedTextClass}`}>
+              Latest SKU and ASIN tool runs from Supabase.
+            </p>
           </div>
-        </div>
-      </div>
 
-      {/* Team Stats */}
-      <div className={`flex justify-center p-4 rounded-xl ${
-        theme === 'dark' ? 'bg-slate-800/30' : 'bg-gray-100/50'
-      }`}>
-        <div className="text-center">
-          <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-            {carouselImages.length}
-          </div>
-          <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Team Members</p>
-        </div>
-      </div>
-
-      {/* Tools Section */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-            Available Tools
-          </h2>
-          <div className={`text-xs px-2 py-1 rounded-full ${
-            theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-gray-200 text-gray-600'
-          }`}>
-            {tools.length} tools available
-          </div>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {tools.map((tool) => (
-            <div
-              key={tool.id}
-              className={`rounded-xl p-6 border transition-all duration-300 hover:shadow-xl ${
-                theme === 'dark'
-                  ? 'bg-gradient-to-br from-[#1E293B]/50 to-[#0F172A]/50 border-slate-700/50 hover:border-emerald-500/30'
-                  : 'bg-gradient-to-br from-white/80 to-gray-100/80 border-gray-200/50 hover:border-emerald-500/30'
-              }`}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`text-3xl p-3 rounded-xl ${theme === 'dark' ? 'bg-slate-800/50' : 'bg-gray-200/50'}`}>
-                    {tool.icon}
-                  </div>
-                  <div>
-                    <h3 className={`font-semibold text-lg ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                      {tool.name}
-                    </h3>
-                    <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>
-                      {tool.description}
-                    </p>
-                  </div>
-                </div>
-                {getToolStatusBadge(tool.status)}
+          <div className="max-h-[28rem] overflow-y-auto">
+            {isLoading ? (
+              <div className="flex h-48 items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
               </div>
-              <div className="flex items-center justify-between pt-4 border-t border-slate-700/30">
-                <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                  </svg>
-                  <span className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>
-                    {tool.usageCount.toLocaleString()} uses
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleLaunchTool(tool.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 transform hover:scale-105 ${
-                    theme === 'dark'
-                      ? 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
-                      : 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'
-                  }`}
-                >
-                  Launch Tool →
-                </button>
+            ) : runs.length === 0 ? (
+              <div className="flex h-48 flex-col items-center justify-center text-center">
+                <Activity className={`mb-3 h-10 w-10 ${mutedTextClass}`} />
+                <p className={`text-sm font-medium ${strongTextClass}`}>
+                  No activity yet
+                </p>
+                <p className={`mt-1 text-xs ${mutedTextClass}`}>
+                  Run the SKU Processor or ASIN Checker to populate this dashboard.
+                </p>
               </div>
-            </div>
-          ))}
+            ) : (
+              <div className="divide-y divide-slate-700/30">
+                {runs.map((run) => (
+                  <ActivityRow key={run.id} run={run} theme={theme} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({
+  theme,
+  icon,
+  label,
+  value,
+  description,
+  color,
+}: {
+  theme: 'light' | 'dark';
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  description: string;
+  color: 'emerald' | 'blue' | 'yellow' | 'red';
+}) {
+  const isDark = theme === 'dark';
+
+  const colorClass = {
+    emerald: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+    blue: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
+    yellow: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20',
+    red: 'text-red-500 bg-red-500/10 border-red-500/20',
+  }[color];
+
+  return (
+    <div
+      className={`rounded-xl border p-5 shadow-lg ${
+        isDark
+          ? 'border-slate-700/50 bg-slate-900/50'
+          : 'border-gray-200 bg-white/80'
+      }`}
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+            {label}
+          </p>
+          <p className={`mt-2 text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            {value.toLocaleString()}
+          </p>
+        </div>
+
+        <div className={`rounded-lg border p-2 ${colorClass}`}>{icon}</div>
+      </div>
+
+      <p className={`mt-3 text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function ActivityRow({
+  run,
+  theme,
+}: {
+  run: ToolRun;
+  theme: 'light' | 'dark';
+}) {
+  const isDark = theme === 'dark';
+
+  const statusClass =
+    run.status === 'completed'
+      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+      : run.status === 'warning'
+        ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+        : 'bg-red-500/10 text-red-500 border-red-500/20';
+
+  return (
+    <div className="flex items-start gap-4 px-6 py-4">
+      <div
+        className={`mt-1 rounded-lg border p-2 ${
+          run.tool_type === 'sku'
+            ? 'border-blue-500/20 bg-blue-500/10 text-blue-500'
+            : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500'
+        }`}
+      >
+        {run.tool_type === 'sku' ? (
+          <Database className="h-4 w-4" />
+        ) : (
+          <SearchCheck className="h-4 w-4" />
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            {run.title}
+          </p>
+          <span className={`rounded-full border px-2 py-0.5 text-[11px] ${statusClass}`}>
+            {run.status}
+          </span>
+        </div>
+
+        {run.description && (
+          <p className={`mt-1 text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+            {run.description}
+          </p>
+        )}
+
+        <div className={`mt-2 flex flex-wrap gap-3 text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+          <span>Total: {run.total_count ?? 0}</span>
+          <span>Success: {run.success_count ?? 0}</span>
+          <span>Issues: {run.issue_count ?? 0}</span>
+          {run.filename && <span className="truncate">File: {run.filename}</span>}
         </div>
       </div>
 
-      {/* Team Values */}
-      <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t ${
-        theme === 'dark' ? 'border-slate-700/50' : 'border-gray-200'
-      }`}>
-        <div className="text-center p-4">
-          <div className="text-2xl mb-2">🤝</div>
-          <p className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Collaboration</p>
-          <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Working together for success</p>
-        </div>
-        <div className="text-center p-4">
-          <div className="text-2xl mb-2">⚡</div>
-          <p className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Innovation</p>
-          <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Constantly improving our tools</p>
-        </div>
-        <div className="text-center p-4">
-          <div className="text-2xl mb-2">🎯</div>
-          <p className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Excellence</p>
-          <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Delivering quality results</p>
-        </div>
-      </div>
+      <span className={`whitespace-nowrap text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+        {new Date(run.created_at).toLocaleString()}
+      </span>
     </div>
   );
 }

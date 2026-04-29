@@ -1,7 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { BookOpen, FileText, Search, ChevronRight, ExternalLink, Code, Database, Shield, Zap, Users, Clock } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  BookOpen,
+  Code,
+  Database,
+  FileText,
+  Search,
+  Shield,
+} from 'lucide-react';
 
 interface DocumentationProps {
   theme?: 'light' | 'dark';
@@ -10,278 +17,495 @@ interface DocumentationProps {
 interface DocSection {
   id: string;
   title: string;
+  description: string;
   content: string;
   icon: React.ReactNode;
 }
 
-export default function Documentation({ theme = 'dark' }: DocumentationProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeSection, setActiveSection] = useState('overview');
-  const isDark = theme === 'dark';
-
-  const sections: DocSection[] = [
-    {
-      id: 'overview',
-      title: 'Overview',
-      icon: <BookOpen className="w-5 h-5" />,
-      content: `The Listing Operations Tool (TARA) is a comprehensive suite designed to streamline and optimize your Amazon listing management workflow. Our tools help you process SKU data efficiently and identify ASIN conflicts before they become problems.
+const sections: DocSection[] = [
+  {
+    id: 'overview',
+    title: 'Overview',
+    description: 'Learn what TARA is and how it supports listing operations.',
+    icon: <BookOpen className="h-5 w-5" />,
+    content: `The Listing Operations Tool (TARA) is a comprehensive suite designed to streamline and optimize your Amazon listing management workflow. The tools help you process SKU data efficiently and identify ASIN conflicts before they become operational issues.
 
 Key Features:
 • SKU Consolidated Tool - Batch process and validate SKU data
 • Multiple Parent ASIN Checker - Detect styles with multiple parent ASINs
 • Real-time validation and error detection
-• Export results in CSV format for further analysis
-• Dark/Light mode support for comfortable viewing
+• Export results for further analysis
+• Dark and light mode support for comfortable viewing
 
-This tool is designed for Amazon sellers, listing managers, and e-commerce operations teams who need to maintain clean, conflict-free product listings.`
-    },
-    {
-      id: 'sku-tool',
-      title: 'SKU Consolidated Tool',
-      icon: <Database className="w-5 h-5" />,
-      content: `The SKU Consolidated Tool helps you process and validate large volumes of SKU data efficiently.
+This tool is designed for Amazon sellers, listing managers, and e-commerce operations teams who need to maintain clean, conflict-free product listings.`,
+  },
+  {
+    id: 'sku-tool',
+    title: 'SKU Consolidated Tool',
+    description: 'Process and validate SKU data in batches.',
+    icon: <Database className="h-5 w-5" />,
+    content: `The SKU Consolidated Tool helps you process and validate large volumes of SKU data efficiently.
 
 How to use:
-1. Paste your SKU data in the input area (one per line)
-2. Click "Process SKUs" to start validation
-3. Review the results showing valid and invalid SKUs
-4. Export the results for record-keeping
+1. Paste your SKU data in the input area, one SKU per line.
+2. Click "Process" to start validation and matching.
+3. Review the processing status and matched count.
+4. Download the generated consolidated file.
 
 Features:
 • Bulk SKU validation
 • Duplicate detection
-• Format validation
-• Export to CSV
-• Real-time processing status
+• Batch processing status
+• Brand detection
+• Excel export
 
 Best Practices:
-• Process SKUs in batches of 500 for optimal performance
-• Review invalid SKUs and correct them before re-processing
-• Use the export feature to track changes over time`
-    },
-    {
-      id: 'asin-tool',
-      title: 'Multiple Parent ASIN Checker',
-      icon: <Code className="w-5 h-5" />,
-      content: `The Multiple Parent ASIN Checker identifies styles that have multiple unique parent ASINs mapped to them, which can cause listing conflicts.
+• Remove unnecessary spaces before processing
+• Review duplicate SKUs before submitting
+• Process SKUs in manageable batches for best performance
+• Keep downloaded files for audit and tracking purposes`,
+  },
+  {
+    id: 'asin-tool',
+    title: 'Multiple Parent ASIN Checker',
+    description: 'Identify styles mapped to multiple unique parent ASINs.',
+    icon: <Code className="h-5 w-5" />,
+    content: `The Multiple Parent ASIN Checker identifies styles that have multiple unique parent ASINs mapped to them.
 
 How to use:
-1. Paste Style IDs in the left column (one per line)
-2. Paste corresponding Parent ASINs in the right column (one per line)
-3. Click "Run Check" to analyze the data
-4. Review styles flagged with multiple unique ASINs
+1. Paste Style IDs in the left column, one per line.
+2. Paste corresponding Parent ASINs in the right column, one per line.
+3. Click "Run Check" to analyze the data.
+4. Review styles flagged with multiple unique ASINs.
 
 Understanding Results:
 • A conflict occurs when the same Style ID appears with different Parent ASINs
-• Duplicate ASINs for the same style are ignored (only unique ASINs count)
-• Results show each problematic style and all its unique parent ASINs
+• Duplicate ASINs for the same style are ignored
+• Results show each problematic style and all unique parent ASINs
 
 Tips:
-• Ensure each row correctly pairs a Style ID with its Parent ASIN
-• Use the "Load Sample" button to see how the tool works
-• Export results to CSV for further investigation in Excel`
-    },
-    {
-      id: 'data-format',
-      title: 'Data Format Guidelines',
-      icon: <FileText className="w-5 h-5" />,
-      content: `Proper data formatting ensures accurate results from our tools.
+• Make sure each row correctly pairs a Style ID with its Parent ASIN
+• Use "Load Sample" to understand the expected format
+• Export results to CSV for investigation in Excel`,
+  },
+  {
+    id: 'data-format',
+    title: 'Data Format Guidelines',
+    description: 'Recommended formatting rules for SKUs, ASINs, and Style IDs.',
+    icon: <FileText className="h-5 w-5" />,
+    content: `Proper data formatting ensures accurate results from the tools.
 
 SKU Format Guidelines:
-• SKUs should be alphanumeric
-• Avoid special characters except hyphens and underscores
-• Maximum length: 50 characters
-• Each SKU should be unique within your catalog
+• SKUs should be alphanumeric where possible
+• Avoid unnecessary spaces
+• Keep formatting consistent
+• Each SKU should represent one catalog item
 
 ASIN Format Guidelines:
-• ASINs are 10-character alphanumeric codes
-• Format: BXXXXXXXXX (starts with B followed by 9 characters)
-• All ASINs should be uppercase
+• ASINs are usually 10-character alphanumeric codes
+• Example format: BXXXXXXXXX
+• Keep ASINs uppercase for consistency
 • ASINs are Amazon-specific identifiers
 
 Style ID Format:
-• Can include letters, numbers, and special characters
-• Case-sensitive - maintain consistent formatting
-• Maximum length: 100 characters
+• Style IDs can include letters, numbers, and separators
+• Maintain consistent casing
+• Avoid accidental extra spaces
+• Use the same Style ID format across files
 
 Input Format:
-• One entry per line in the textarea
-• No empty lines between entries
-• Matching rows between columns are paired by line number`
-    },
-    {
-      id: 'security',
-      title: 'Security & Privacy',
-      icon: <Shield className="w-5 h-5" />,
-      content: `Your data security is our top priority.
+• One entry per line
+• Matching rows between columns are paired by line number
+• Rows with missing values may be ignored by some tools`,
+  },
+  {
+    id: 'security',
+    title: 'Security & Privacy',
+    description: 'Understand how data is handled while using TARA.',
+    icon: <Shield className="h-5 w-5" />,
+    content: `Your data security is important.
 
 Data Processing:
-• All data processing occurs locally in your browser
-• No data is stored on our servers
-• No API calls to external services for data processing
-• Your information never leaves your computer
+• ASIN conflict checking is processed in the browser
+• SKU processing may communicate with your internal API endpoint
+• Exported files are generated for user download
+• Data should be cleared after processing sensitive information
 
-Privacy Features:
-• No login or registration required
-• No tracking cookies used
-• No data collection or analytics
-• Results are never shared or transmitted
+Privacy Practices:
+• Avoid uploading confidential data unless required
+• Do not share exported files with unauthorized users
+• Clear the interface after processing sensitive data
+• Use only approved internal links and environments
 
 Best Security Practices:
-• Always verify you're using the official tool URL
-• Don't share exported CSV files containing sensitive data
-• Clear your browser cache after processing sensitive information
-• Use the clear button to remove data from the interface`
-    }
-  ];
+• Verify you are using the official tool URL
+• Review files before sharing externally
+• Delete unnecessary downloaded exports
+• Contact your administrator if you notice unexpected behavior`,
+  },
+];
 
-  const filteredSections = sections.filter(section =>
-    section.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    section.content.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+export default function Documentation({ theme = 'dark' }: DocumentationProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeSection, setActiveSection] = useState('overview');
+
+  const isDark = theme === 'dark';
+
+  const filteredSections = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    if (!normalizedSearch) return sections;
+
+    return sections.filter((section) => {
+      return (
+        section.title.toLowerCase().includes(normalizedSearch) ||
+        section.description.toLowerCase().includes(normalizedSearch) ||
+        section.content.toLowerCase().includes(normalizedSearch)
+      );
+    });
+  }, [searchTerm]);
+
+  const selectedSection = useMemo(() => {
+    if (searchTerm.trim()) {
+      return filteredSections[0] ?? null;
+    }
+
+    return sections.find((section) => section.id === activeSection) ?? sections[0];
+  }, [activeSection, filteredSections, searchTerm]);
+
+  const cardClass = isDark
+    ? 'bg-slate-900/50 border-slate-700/50'
+    : 'bg-white/70 border-gray-300/60';
+
+  const mutedTextClass = isDark ? 'text-slate-400' : 'text-gray-600';
+  const strongTextClass = isDark ? 'text-white' : 'text-gray-900';
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="flex h-full w-full flex-col">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h1 className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Documentation
-            </h1>
-            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
-              Learn how to use TARA tools effectively
-            </p>
-          </div>
+        <div>
+          <h1 className={`mb-1 text-2xl font-bold ${strongTextClass}`}>
+            Documentation
+          </h1>
+          <p className={`text-sm ${mutedTextClass}`}>
+            Learn how to use TARA tools effectively.
+          </p>
         </div>
 
         {/* Search Bar */}
         <div className="relative mt-4">
-          <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${isDark ? 'text-slate-400' : 'text-gray-400'}`} />
+          <Search
+            className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${
+              isDark ? 'text-slate-400' : 'text-gray-400'
+            }`}
+          />
           <input
             type="text"
             placeholder="Search documentation..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-              isDark 
-                ? 'bg-slate-800/50 border-slate-700 text-white placeholder-slate-500' 
-                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+            onChange={(event) => setSearchTerm(event.target.value)}
+            className={`w-full rounded-lg border py-2 pl-10 pr-4 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/70 ${
+              isDark
+                ? 'border-slate-700 bg-slate-800/50 text-white placeholder-slate-500'
+                : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
             }`}
           />
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex gap-6 flex-1 min-h-0">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-[18rem_1fr]">
         {/* Sidebar Navigation */}
-        <div className={`w-64 flex-shrink-0 rounded-lg border overflow-y-auto ${
-          isDark 
-            ? 'bg-slate-900/50 border-slate-700/50' 
-            : 'bg-white/50 border-gray-300/50'
-        }`}>
-          <div className="p-4">
-            <h3 className={`text-xs font-semibold mb-3 uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+        <aside className={`overflow-hidden rounded-xl border ${cardClass}`}>
+          <div className="border-b border-slate-700/30 p-4">
+            <h3
+              className={`text-xs font-semibold uppercase tracking-wider ${
+                isDark ? 'text-slate-400' : 'text-gray-500'
+              }`}
+            >
               Contents
             </h3>
+          </div>
+
+          <div className="max-h-[28rem] overflow-y-auto p-3">
             <div className="space-y-1">
-              {sections.map((section) => (
-                <button
-                  key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                    activeSection === section.id
-                      ? isDark
-                        ? 'bg-emerald-600/20 text-emerald-400 border-l-2 border-emerald-500'
-                        : 'bg-emerald-100 text-emerald-700 border-l-2 border-emerald-500'
-                      : isDark
-                        ? 'hover:bg-slate-800/50 text-slate-300'
-                        : 'hover:bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  {section.icon}
-                  <span className="text-sm">{section.title}</span>
-                </button>
-              ))}
+              {sections.map((section) => {
+                const active = !searchTerm.trim() && activeSection === section.id;
+
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveSection(section.id);
+                      setSearchTerm('');
+                    }}
+                    className={`flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/70 ${
+                      active
+                        ? isDark
+                          ? 'border-l-2 border-emerald-500 bg-emerald-600/20 text-emerald-400'
+                          : 'border-l-2 border-emerald-500 bg-emerald-100 text-emerald-700'
+                        : isDark
+                          ? 'text-slate-300 hover:bg-slate-800/50'
+                          : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span className="mt-0.5 flex-shrink-0">{section.icon}</span>
+                    <span>
+                      <span className="block text-sm font-medium">
+                        {section.title}
+                      </span>
+                      <span
+                        className={`mt-0.5 line-clamp-2 block text-xs ${
+                          isDark ? 'text-slate-500' : 'text-gray-500'
+                        }`}
+                      >
+                        {section.description}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
-        </div>
+        </aside>
 
         {/* Content Area */}
-        <div className={`flex-1 rounded-lg border overflow-auto ${
-          isDark 
-            ? 'bg-slate-900/50 border-slate-700/50' 
-            : 'bg-white/50 border-gray-300/50'
-        }`}>
-          {filteredSections.length > 0 ? (
-            <div className="p-6">
-              {filteredSections.map((section) => (
+        <main className={`min-h-[30rem] overflow-auto rounded-xl border ${cardClass}`}>
+          {searchTerm.trim() && (
+            <div
+              className={`border-b px-6 py-3 text-sm ${
+                isDark
+                  ? 'border-slate-700/50 bg-slate-800/30 text-slate-300'
+                  : 'border-gray-200 bg-gray-50 text-gray-700'
+              }`}
+            >
+              {filteredSections.length > 0 ? (
+                <>
+                  Showing {filteredSections.length} result
+                  {filteredSections.length !== 1 ? 's' : ''} for{' '}
+                  <span className="font-semibold text-emerald-500">
+                    “{searchTerm}”
+                  </span>
+                </>
+              ) : (
+                <>
+                  No results found for{' '}
+                  <span className="font-semibold text-emerald-500">
+                    “{searchTerm}”
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+
+          {selectedSection ? (
+            <article className="p-6">
+              <div className="mb-5 flex items-start gap-3">
                 <div
-                  key={section.id}
-                  id={section.id}
-                  className={activeSection === section.id ? 'block' : 'hidden'}
+                  className={`rounded-lg p-2 ${
+                    isDark ? 'bg-emerald-600/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                  }`}
                 >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={`p-2 rounded-lg ${isDark ? 'bg-emerald-600/20' : 'bg-emerald-100'}`}>
-                      {section.icon}
-                    </div>
-                    <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      {section.title}
-                    </h2>
-                  </div>
-                  <div className={`prose max-w-none ${isDark ? 'prose-invert' : ''}`}>
-                    {section.content.split('\n\n').map((paragraph, idx) => {
-                      if (paragraph.startsWith('•')) {
-                        return (
-                          <ul key={idx} className={`list-disc pl-6 mb-4 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                            {paragraph.split('\n').map((item, itemIdx) => (
-                              <li key={itemIdx} className="mb-1">
-                                {item.replace('•', '').trim()}
-                              </li>
-                            ))}
-                          </ul>
-                        );
-                      }
-                      if (paragraph.startsWith('Q:')) {
-                        return (
-                          <div key={idx} className={`mb-4 p-4 rounded-lg ${isDark ? 'bg-slate-800/30' : 'bg-gray-100'}`}>
-                            <p className={`font-semibold mb-2 ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
-                              {paragraph.split('\n')[0]}
-                            </p>
-                            <p className={isDark ? 'text-slate-300' : 'text-gray-700'}>
-                              {paragraph.split('\n').slice(1).join('\n')}
-                            </p>
+                  {selectedSection.icon}
+                </div>
+
+                <div>
+                  <h2 className={`text-xl font-bold ${strongTextClass}`}>
+                    {selectedSection.title}
+                  </h2>
+                  <p className={`mt-1 text-sm ${mutedTextClass}`}>
+                    {selectedSection.description}
+                  </p>
+                </div>
+              </div>
+
+              <DocumentationContent
+                content={selectedSection.content}
+                isDark={isDark}
+              />
+
+              {searchTerm.trim() && filteredSections.length > 1 && (
+                <div className="mt-8">
+                  <h3
+                    className={`mb-3 text-sm font-semibold ${
+                      isDark ? 'text-slate-300' : 'text-gray-700'
+                    }`}
+                  >
+                    Other matching sections
+                  </h3>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {filteredSections
+                      .filter((section) => section.id !== selectedSection.id)
+                      .map((section) => (
+                        <button
+                          key={section.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveSection(section.id);
+                            setSearchTerm('');
+                          }}
+                          className={`rounded-lg border p-4 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/70 ${
+                            isDark
+                              ? 'border-slate-700/60 bg-slate-800/30 hover:bg-slate-800/60'
+                              : 'border-gray-200 bg-white hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="mb-2 flex items-center gap-2 text-emerald-500">
+                            {section.icon}
+                            <span className="text-sm font-semibold">
+                              {section.title}
+                            </span>
                           </div>
-                        );
-                      }
-                      return (
-                        <p key={idx} className={`mb-4 leading-relaxed ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                          {paragraph}
-                        </p>
-                      );
-                    })}
+                          <p
+                            className={`line-clamp-2 text-xs ${
+                              isDark ? 'text-slate-400' : 'text-gray-600'
+                            }`}
+                          >
+                            {section.description}
+                          </p>
+                        </button>
+                      ))}
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </article>
           ) : (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <Search className={`w-12 h-12 mb-4 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
-              <p className={`font-medium ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>No results found</p>
-              <p className={`text-sm mt-1 ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
-                Try adjusting your search terms
+            <div className="flex h-64 flex-col items-center justify-center text-center">
+              <Search
+                className={`mb-4 h-12 w-12 ${
+                  isDark ? 'text-slate-500' : 'text-gray-400'
+                }`}
+              />
+              <p className={`font-medium ${mutedTextClass}`}>No results found</p>
+              <p
+                className={`mt-1 text-sm ${
+                  isDark ? 'text-slate-500' : 'text-gray-500'
+                }`}
+              >
+                Try adjusting your search terms.
               </p>
             </div>
           )}
-        </div>
+        </main>
       </div>
 
       {/* Footer */}
-      <div className="mt-6 pt-4 border-t text-center">
+      <div
+        className={`mt-6 border-t pt-4 text-center ${
+          isDark ? 'border-slate-700/50' : 'border-gray-200'
+        }`}
+      >
         <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
           Need additional help? Contact your system administrator for support.
         </p>
       </div>
+    </div>
+  );
+}
+
+function DocumentationContent({
+  content,
+  isDark,
+}: {
+  content: string;
+  isDark: boolean;
+}) {
+  const blocks = content.split('\n\n');
+
+  return (
+    <div className="max-w-none">
+      {blocks.map((block, index) => {
+        const lines = block.split('\n');
+        const heading = lines[0];
+        const rest = lines.slice(1);
+
+        const isHeadingBlock =
+          heading.endsWith(':') && rest.length > 0;
+
+        const bulletLines = lines.filter((line) => line.trim().startsWith('•'));
+        const numberedLines = lines.filter((line) => /^\d+\./.test(line.trim()));
+
+        if (isHeadingBlock && bulletLines.length > 0) {
+          return (
+            <section key={`${heading}-${index}`} className="mb-6">
+              <h3
+                className={`mb-3 text-sm font-semibold ${
+                  isDark ? 'text-emerald-400' : 'text-emerald-700'
+                }`}
+              >
+                {heading}
+              </h3>
+              <ul
+                className={`list-disc space-y-2 pl-6 text-sm leading-relaxed ${
+                  isDark ? 'text-slate-300' : 'text-gray-700'
+                }`}
+              >
+                {bulletLines.map((line) => (
+                  <li key={line}>{line.replace('•', '').trim()}</li>
+                ))}
+              </ul>
+            </section>
+          );
+        }
+
+        if (isHeadingBlock && numberedLines.length > 0) {
+          return (
+            <section key={`${heading}-${index}`} className="mb-6">
+              <h3
+                className={`mb-3 text-sm font-semibold ${
+                  isDark ? 'text-emerald-400' : 'text-emerald-700'
+                }`}
+              >
+                {heading}
+              </h3>
+              <ol
+                className={`list-decimal space-y-2 pl-6 text-sm leading-relaxed ${
+                  isDark ? 'text-slate-300' : 'text-gray-700'
+                }`}
+              >
+                {numberedLines.map((line) => (
+                  <li key={line}>{line.replace(/^\d+\.\s*/, '').trim()}</li>
+                ))}
+              </ol>
+            </section>
+          );
+        }
+
+        if (isHeadingBlock) {
+          return (
+            <section key={`${heading}-${index}`} className="mb-6">
+              <h3
+                className={`mb-3 text-sm font-semibold ${
+                  isDark ? 'text-emerald-400' : 'text-emerald-700'
+                }`}
+              >
+                {heading}
+              </h3>
+              <p
+                className={`text-sm leading-relaxed ${
+                  isDark ? 'text-slate-300' : 'text-gray-700'
+                }`}
+              >
+                {rest.join(' ')}
+              </p>
+            </section>
+          );
+        }
+
+        return (
+          <p
+            key={`${block.slice(0, 20)}-${index}`}
+            className={`mb-5 text-sm leading-7 ${
+              isDark ? 'text-slate-300' : 'text-gray-700'
+            }`}
+          >
+            {block}
+          </p>
+        );
+      })}
     </div>
   );
 }
