@@ -82,8 +82,8 @@ export default function Home() {
 
   // Tools sub-items
   const toolsSubItems = [
-    { id: 'sku', name: 'Shopkeep Consolidated Tool', description: 'Process and consolidate SKU data' },
-    { id: 'asin', name: 'Multiple Parent ASIN Checker', description: 'Check and validate ASIN conflicts' },
+    { id: 'sku', name: 'Shopkeep Consolidated Tool'},
+    { id: 'asin', name: 'Multiple Parent ASIN Checker'},
   ];
 
   // Get current page title and breadcrumb
@@ -233,7 +233,6 @@ export default function Home() {
                     }`}
                   >
                     <div className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{tool.name}</div>
-                    <div className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>{tool.description}</div>
                   </button>
                 ))}
               </div>

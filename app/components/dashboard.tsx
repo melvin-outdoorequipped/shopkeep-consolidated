@@ -108,7 +108,7 @@ export default function Dashboard({ theme }: DashboardProps) {
       url: 'https://cdn.phototourl.com/free/2026-04-29-056a0bbf-227c-4a02-b24c-9362410b6273.png',
       title: 'Listing Ops',
       description: 'No desc',
-      name: 'mark',
+      name: 'Rich Chards',
       role: 'Data Analyst'
     }
   ];
@@ -251,35 +251,11 @@ export default function Dashboard({ theme }: DashboardProps) {
               ))}
             </div>
           </div>
-
-          {/* Slide Info */}
-          <div className="flex items-center justify-between mt-3 px-4">
-            <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>
-              Team Member {currentSlide + 1} of {carouselImages.length}
-            </p>
-            <div className="flex gap-1">
-              {carouselImages.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => goToSlide(index)}
-                  className={`transition-all duration-200 ${
-                    currentSlide === index
-                      ? theme === 'dark'
-                        ? 'w-4 h-1 bg-emerald-500 rounded-full'
-                        : 'w-4 h-1 bg-emerald-600 rounded-full'
-                      : theme === 'dark'
-                        ? 'w-2 h-1 bg-slate-600 rounded-full hover:bg-slate-500'
-                        : 'w-2 h-1 bg-gray-300 rounded-full hover:bg-gray-400'
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 
       {/* Team Stats */}
-      <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl ${
+      <div className={`flex justify-center p-4 rounded-xl ${
         theme === 'dark' ? 'bg-slate-800/30' : 'bg-gray-100/50'
       }`}>
         <div className="text-center">
@@ -287,24 +263,6 @@ export default function Dashboard({ theme }: DashboardProps) {
             {carouselImages.length}
           </div>
           <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Team Members</p>
-        </div>
-        <div className="text-center">
-          <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-            24/7
-          </div>
-          <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Support Available</p>
-        </div>
-        <div className="text-center">
-          <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-            99.9%
-          </div>
-          <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Uptime</p>
-        </div>
-        <div className="text-center">
-          <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-            500K+
-          </div>
-          <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>SKUs Managed</p>
         </div>
       </div>
 
