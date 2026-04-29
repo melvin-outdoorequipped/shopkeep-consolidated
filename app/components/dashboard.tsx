@@ -78,6 +78,38 @@ export default function Dashboard({ theme }: DashboardProps) {
       description: 'No desc',
       name: 'JOns',
       role: 'Data Analyst'
+    },
+    {
+      id: 5,
+      url: 'https://cdn.phototourl.com/free/2026-04-29-69da0659-11bc-4ada-a133-71b5843cef46.png',
+      title: 'Listing Ops',
+      description: 'No desc',
+      name: 'Ashlie',
+      role: 'Data Analyst'
+    },
+    {
+      id: 6,
+      url: 'https://cdn.phototourl.com/free/2026-04-29-930ed2af-75a0-4ace-8e6a-a7de32e5afa2.png',
+      title: 'Listing Ops',
+      description: 'No desc',
+      name: 'lorens',
+      role: 'Data Analyst'
+    },
+    {
+      id: 7,
+      url: 'https://cdn.phototourl.com/free/2026-04-29-3e0567f4-9afb-4991-a154-bc57a094a4db.png',
+      title: 'Listing Ops',
+      description: 'No desc',
+      name: 'mark',
+      role: 'Data Analyst'
+    },
+    {
+      id: 8,
+      url: 'https://cdn.phototourl.com/free/2026-04-29-056a0bbf-227c-4a02-b24c-9362410b6273.png',
+      title: 'Listing Ops',
+      description: 'No desc',
+      name: 'mark',
+      role: 'Data Analyst'
     }
   ];
 
