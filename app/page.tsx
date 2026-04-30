@@ -10,19 +10,21 @@ import {
   FileText,
   Home,
   Menu,
+  MessageSquare,
   Settings,
   X,
 } from 'lucide-react';
 
 import SkuProcessor from './components/SkuProcessor';
 import AsinConflictChecker from './components/AsinConflictChecker';
+import BasecampGenerator from './components/BasecampGenerator';
 import Dashboard from './components/dashboard';
 import Documentation from './components/documentation';
 import Terms from './components/terms';
 import DownloadPage from './components/download';
 
 type Theme = 'light' | 'dark';
-type ToolId = 'sku' | 'asin';
+type ToolId = 'sku' | 'asin' | 'basecamp';
 
 type MainMenuId =
   | 'Dashboard'
@@ -41,6 +43,7 @@ interface ToolItem {
   id: ToolId;
   name: string;
   description: string;
+  comingSoon?: boolean;
 }
 
 const STORAGE_THEME_KEY = 'theme';
@@ -56,6 +59,12 @@ const toolsSubItems: ToolItem[] = [
     name: 'Multiple Parent ASIN Checker',
     description: 'Detect styles with multiple parent ASINs.',
   },
+  {
+    id: 'basecamp',
+    name: 'Basecamp Response Generator',
+    description: 'Generate formatted Basecamp messages - Coming Soon!',
+    comingSoon: true,
+  },
 ];
 
 function applyTheme(theme: Theme) {
@@ -66,9 +75,7 @@ function applyTheme(theme: Theme) {
 
 export default function HomePage() {
   const [activeTool, setActiveTool] = useState<ToolId>('sku');
-  const [activeMainMenu, setActiveMainMenu] =
-    useState<MainMenuId>('Dashboard');
-
+  const [activeMainMenu, setActiveMainMenu] = useState<MainMenuId>('Dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>('dark');
@@ -129,10 +136,16 @@ export default function HomePage() {
 
   useEffect(() => {
     const handleNavigateToTool = (event: Event) => {
+      
       const customEvent = event as CustomEvent<{ toolId: ToolId }>;
       const toolId = customEvent.detail?.toolId;
+      
 
-      if (toolId !== 'sku' && toolId !== 'asin') return;
+      if (toolId !== 'sku' && toolId !== 'asin' && toolId !== 'basecamp') return;
+      
+      // Check if the tool is coming soon
+      const tool = toolsSubItems.find(t => t.id === toolId);
+      if (tool?.comingSoon) return; // Don't navigate if coming soon
 
       setActiveMainMenu('Tools');
       setActiveTool(toolId);
@@ -140,19 +153,14 @@ export default function HomePage() {
     };
 
     window.addEventListener('navigateToTool', handleNavigateToTool);
-
-    return () => {
-      window.removeEventListener('navigateToTool', handleNavigateToTool);
-    };
+    return () => window.removeEventListener('navigateToTool', handleNavigateToTool);
   }, []);
 
   const toggleTheme = useCallback(() => {
     setTheme((currentTheme) => {
       const nextTheme: Theme = currentTheme === 'dark' ? 'light' : 'dark';
-
       localStorage.setItem(STORAGE_THEME_KEY, nextTheme);
       applyTheme(nextTheme);
-
       return nextTheme;
     });
   }, []);
@@ -162,7 +170,8 @@ export default function HomePage() {
     setIsMobileSidebarOpen(false);
   };
 
-  const handleToolClick = (toolId: ToolId) => {
+  const handleToolClick = (toolId: ToolId, comingSoon?: boolean) => {
+    if (comingSoon) return; // Don't navigate if coming soon
     setActiveMainMenu('Tools');
     setActiveTool(toolId);
     setIsMobileSidebarOpen(false);
@@ -179,11 +188,12 @@ export default function HomePage() {
 
     if (activeMainMenu === 'Tools') {
       const selectedTool = toolsSubItems.find((tool) => tool.id === activeTool);
-
       return {
-        title: selectedTool?.name ?? 'Tools',
-        breadcrumb: `Tools / ${selectedTool?.name ?? 'Selected Tool'}`,
-        description: selectedTool?.description ?? 'Run listing operations tools.',
+        title: selectedTool?.comingSoon ? 'Basecamp Response Generator (Coming Soon)' : (selectedTool?.name ?? 'Tools'),
+        breadcrumb: `Tools / ${selectedTool?.comingSoon ? 'Basecamp Response Generator (Coming Soon)' : (selectedTool?.name ?? 'Selected Tool')}`,
+        description: selectedTool?.comingSoon 
+          ? 'This tool is currently in development and will be available soon.' 
+          : (selectedTool?.description ?? 'Run listing operations tools.'),
       };
     }
 
@@ -211,28 +221,57 @@ export default function HomePage() {
   }, [activeMainMenu, activeTool]);
 
   const renderContent = () => {
-    if (activeMainMenu === 'Dashboard') {
-      return <Dashboard theme={theme} />;
-    }
-
-    if (activeMainMenu === 'Downloads') {
-      return <DownloadPage theme={theme} />;
-    }
+    if (activeMainMenu === 'Dashboard') return <Dashboard theme={theme} />;
+    if (activeMainMenu === 'Downloads') return <DownloadPage theme={theme} />;
+    if (activeMainMenu === 'Documentation') return <Documentation theme={theme} />;
+    if (activeMainMenu === 'Terms') return <Terms theme={theme} />;
 
     if (activeMainMenu === 'Tools') {
-      if (activeTool === 'sku') {
-        return <SkuProcessor theme={theme} />;
+      // Check if the active tool is coming soon
+      const currentTool = toolsSubItems.find(t => t.id === activeTool);
+      if (currentTool?.comingSoon) {
+        return (
+          <div className={`flex h-full items-center justify-center rounded-2xl border-2 border-dashed p-12 text-center ${
+            isDark 
+              ? 'border-slate-700/50 bg-slate-900/40' 
+              : 'border-gray-300 bg-gray-50'
+          }`}>
+            <div className="max-w-md">
+              <div className="mb-4 flex justify-center">
+                <div className={`rounded-full p-4 ${
+                  isDark ? 'bg-yellow-500/20' : 'bg-yellow-100'
+                }`}>
+                  <MessageSquare className={`h-12 w-12 ${
+                    isDark ? 'text-yellow-400' : 'text-yellow-600'
+                  }`} />
+                </div>
+              </div>
+              <h2 className={`mb-2 text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                Coming Soon!
+              </h2>
+              <p className={`mb-4 ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
+                The Basecamp Response Generator is currently under development. 
+                We're working hard to bring you this feature soon.
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveMainMenu('Dashboard')}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  isDark
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                }`}
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          </div>
+        );
       }
-
-      return <AsinConflictChecker theme={theme} />;
-    }
-
-    if (activeMainMenu === 'Documentation') {
-      return <Documentation theme={theme} />;
-    }
-
-    if (activeMainMenu === 'Terms') {
-      return <Terms theme={theme} />;
+      
+      if (activeTool === 'sku') return <SkuProcessor theme={theme} />;
+      if (activeTool === 'asin') return <AsinConflictChecker theme={theme} />;
+      if (activeTool === 'basecamp') return <BasecampGenerator theme={theme} />;
     }
 
     return null;
@@ -260,18 +299,10 @@ export default function HomePage() {
         lg:translate-x-0
         ${isSidebarCollapsed ? 'lg:w-20' : 'lg:w-80'}
         w-80
-        ${
-          isDark
-            ? 'border-slate-700/60 bg-[#172235]'
-            : 'border-gray-200 bg-white'
-        }`}
+        ${isDark ? 'border-slate-700/60 bg-[#172235]' : 'border-gray-200 bg-white'}`}
       >
         {/* Sidebar Header */}
-        <div
-          className={`border-b p-5 ${
-            isDark ? 'border-slate-700/60' : 'border-gray-200'
-          }`}
-        >
+        <div className={`border-b p-5 ${isDark ? 'border-slate-700/60' : 'border-gray-200'}`}>
           <div className="flex items-center justify-between">
             <div
               className={`overflow-hidden transition-all duration-300 ${
@@ -282,12 +313,9 @@ export default function HomePage() {
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500 shadow-lg">
                   <span className="text-lg font-bold text-white">T</span>
                 </div>
-
                 <div>
                   <h1 className="text-xl font-bold text-white">TARA</h1>
-                  <p className="text-xs text-slate-400">
-                    Listing Operations Tools
-                  </p>
+                  <p className="text-xs text-slate-400">Listing Operations Tools</p>
                 </div>
               </div>
             </div>
@@ -350,19 +378,34 @@ export default function HomePage() {
                 <button
                   key={tool.id}
                   type="button"
-                  onClick={() => handleToolClick(tool.id)}
+                  onClick={() => handleToolClick(tool.id, tool.comingSoon)}
+                  disabled={tool.comingSoon}
                   className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
-                    activeTool === tool.id
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                      : isDark
-                        ? 'border-slate-700/40 text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                        : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+                    tool.comingSoon
+                      ? 'cursor-not-allowed opacity-60'
+                      : activeTool === tool.id
+                        ? tool.id === 'basecamp'
+                          ? 'border-violet-500/40 bg-violet-500/10 text-violet-300'
+                          : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                        : isDark
+                          ? 'border-slate-700/40 text-slate-400 hover:bg-slate-800/60 hover:text-white'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-100'
                   }`}
                 >
-                  <div className="text-sm font-semibold">{tool.name}</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    {tool.description}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      {tool.id === 'basecamp' && (
+                        <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" />
+                      )}
+                      {tool.name}
+                      {tool.comingSoon && (
+                        <span className="ml-2 inline-flex items-center rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-medium text-yellow-400">
+                          Soon
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  <div className="mt-1 text-xs text-slate-500">{tool.description}</div>
                 </button>
               ))}
             </div>
@@ -370,7 +413,6 @@ export default function HomePage() {
 
           <div className="mt-7">
             <SectionLabel collapsed={isSidebarCollapsed} label="RESOURCES" />
-
             <div className="space-y-2">
               {resourceMenuItems.map((item) => (
                 <SidebarButton
@@ -388,18 +430,12 @@ export default function HomePage() {
         </nav>
 
         {/* Sidebar Footer */}
-        <div
-          className={`border-t p-4 ${
-            isDark ? 'border-slate-700/60' : 'border-gray-200'
-          }`}
-        >
+        <div className={`border-t p-4 ${isDark ? 'border-slate-700/60' : 'border-gray-200'}`}>
           {!isSidebarCollapsed ? (
             <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                <span className="text-sm font-semibold text-emerald-400">
-                  Tools ready
-                </span>
+                <span className="text-sm font-semibold text-emerald-400">Tools ready</span>
               </div>
               <p className="mt-1 text-xs text-slate-400">Beta v1.0</p>
             </div>
@@ -439,21 +475,11 @@ export default function HomePage() {
               </button>
 
               <div className="min-w-0">
-                <p className="truncate text-xs text-slate-400">
-                  {pageMeta.breadcrumb}
-                </p>
-
-                <h2
-                  className={`truncate text-xl font-semibold ${
-                    isDark ? 'text-white' : 'text-gray-900'
-                  }`}
-                >
+                <p className="truncate text-xs text-slate-400">{pageMeta.breadcrumb}</p>
+                <h2 className={`truncate text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   {pageMeta.title}
                 </h2>
-
-                <p className="hidden text-sm text-slate-500 sm:block">
-                  {pageMeta.description}
-                </p>
+                <p className="hidden text-sm text-slate-500 sm:block">{pageMeta.description}</p>
               </div>
             </div>
 
@@ -485,7 +511,6 @@ export default function HomePage() {
           --text-secondary: #6b7280;
           --border-color: #e5e7eb;
         }
-
         .dark-mode {
           --bg-primary: #0f172a;
           --bg-secondary: #172235;
@@ -493,26 +518,14 @@ export default function HomePage() {
           --text-secondary: #94a3b8;
           --border-color: #334155;
         }
-
-        html {
-          scroll-behavior: smooth;
-        }
-
-        ::selection {
-          background: rgba(16, 185, 129, 0.3);
-        }
+        html { scroll-behavior: smooth; }
+        ::selection { background: rgba(16, 185, 129, 0.3); }
       `}</style>
     </div>
   );
 }
 
-function SectionLabel({
-  label,
-  collapsed,
-}: {
-  label: string;
-  collapsed: boolean;
-}) {
+function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
   return (
     <div className="mb-3 px-3 text-xs font-bold uppercase tracking-wider text-slate-500">
       {collapsed ? (
@@ -555,17 +568,11 @@ function SidebarButton({
             : 'border-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900'
       }`}
     >
-      <span
-        className={`transition-colors ${
-          active ? 'text-emerald-400' : 'group-hover:text-emerald-400'
-        }`}
-      >
+      <span className={`transition-colors ${active ? 'text-emerald-400' : 'group-hover:text-emerald-400'}`}>
         {icon}
       </span>
 
-      <span className={`${collapsed ? 'hidden' : 'block'} font-medium`}>
-        {label}
-      </span>
+      <span className={`${collapsed ? 'hidden' : 'block'} font-medium`}>{label}</span>
 
       {active && !collapsed && (
         <span className="ml-auto h-7 w-1 rounded-full bg-emerald-400" />

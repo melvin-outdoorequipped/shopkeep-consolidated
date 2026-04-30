@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Database,
   Loader2,
+  MessageSquare,
   RefreshCw,
   SearchCheck,
   ShieldCheck,
@@ -22,7 +23,7 @@ interface DashboardProps {
 
 interface ToolRun {
   id: string;
-  tool_type: 'sku' | 'asin';
+  tool_type: 'sku' | 'asin' | 'basecamp';
   status: 'completed' | 'failed' | 'warning';
   title: string;
   description: string | null;
@@ -34,14 +35,15 @@ interface ToolRun {
 }
 
 interface ToolCardItem {
-  id: 'sku' | 'asin';
+  id: 'sku' | 'asin' | 'basecamp';
   category: string;
   title: string;
   description: string;
   status: string;
   usage: string;
-  accent: 'blue' | 'green';
+  accent: 'blue' | 'green' | 'purple';
   icon: React.ReactNode;
+  comingSoon?: boolean;
 }
 
 const operationTools: ToolCardItem[] = [
@@ -66,6 +68,18 @@ const operationTools: ToolCardItem[] = [
     usage: 'Unlimited',
     accent: 'green',
     icon: <SearchCheck className="h-4 w-4" />,
+  },
+  {
+    id: 'basecamp',
+    category: 'COMMUNICATIONS',
+    title: 'Basecamp Response Generator',
+    description:
+      'Upload PO files (pre-approval, listing data, excluded) and auto-generate formatted Basecamp messages for initial analysis, final analysis, or pre-approval.',
+    status: 'Coming Soon',
+    usage: 'Coming Soon',
+    accent: 'purple',
+    icon: <MessageSquare className="h-4 w-4" />,
+    comingSoon: true,
   },
 ];
 
@@ -105,42 +119,29 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
 
   const metrics = useMemo(() => {
     const totalRuns = runs.length;
-
-    const completedRuns = runs.filter(
-      (run) => run.status === 'completed'
-    ).length;
-
-    const warningRuns = runs.filter(
-      (run) => run.status === 'warning'
-    ).length;
-
+    const completedRuns = runs.filter((run) => run.status === 'completed').length;
+    const warningRuns = runs.filter((run) => run.status === 'warning').length;
     const failedRuns = runs.filter((run) => run.status === 'failed').length;
-
     const skuRuns = runs.filter((run) => run.tool_type === 'sku').length;
     const asinRuns = runs.filter((run) => run.tool_type === 'asin').length;
+    const basecampRuns = runs.filter((run) => run.tool_type === 'basecamp').length;
 
     const totalProcessed = runs.reduce(
       (sum, run) => sum + Number(run.total_count ?? 0),
       0
     );
-
     const totalSuccess = runs.reduce(
       (sum, run) => sum + Number(run.success_count ?? 0),
       0
     );
-
     const totalIssues = runs.reduce(
       (sum, run) => sum + Number(run.issue_count ?? 0),
       0
     );
-
     const completionRate =
       totalRuns > 0 ? Math.round((completedRuns / totalRuns) * 100) : 0;
-
     const successRate =
-      totalProcessed > 0
-        ? Math.round((totalSuccess / totalProcessed) * 100)
-        : 0;
+      totalProcessed > 0 ? Math.round((totalSuccess / totalProcessed) * 100) : 0;
 
     return {
       totalRuns,
@@ -149,46 +150,43 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
       failedRuns,
       skuRuns,
       asinRuns,
+      basecampRuns,
       totalProcessed,
       totalSuccess,
       totalIssues,
       completionRate,
       successRate,
-      activeTools: operationTools.length,
+      activeTools: operationTools.filter(tool => !tool.comingSoon).length,
     };
   }, [runs]);
 
-  const navigateToTool = (toolId: 'sku' | 'asin') => {
+  const navigateToTool = (toolId: 'sku' | 'asin' | 'basecamp') => {
     window.dispatchEvent(
-      new CustomEvent('navigateToTool', {
-        detail: {
-          toolId,
-        },
-      })
+      new CustomEvent('navigateToTool', { detail: { toolId } })
     );
   };
 
   const pageText = isDark ? 'text-white' : 'text-gray-900';
   const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
-
   const panelClass = isDark
     ? 'border-slate-700/50 bg-slate-900/70'
     : 'border-gray-200 bg-white';
+
+  const getRunCount = (id: 'sku' | 'asin' | 'basecamp') => {
+    if (id === 'sku') return metrics.skuRuns;
+    if (id === 'asin') return metrics.asinRuns;
+    return metrics.basecampRuns;
+  };
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <section className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className={`text-2xl font-bold ${pageText}`}>
-            OPERATION TOOLS
-          </h1>
-
+          <h1 className={`text-2xl font-bold ${pageText}`}>OPERATION TOOLS</h1>
           <p className={`mt-2 text-sm ${mutedText}`}>
             Current Active Tools:{' '}
-            <span className="font-semibold text-emerald-400">
-              {metrics.activeTools}
-            </span>
+            <span className="font-semibold text-emerald-400">{metrics.activeTools}</span>
           </p>
         </div>
 
@@ -237,13 +235,13 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
       )}
 
       {/* Tool Cards */}
-      <section className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-2">
+      <section className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {operationTools.map((tool) => (
           <ToolCard
             key={tool.id}
             tool={tool}
             theme={theme}
-            runCount={tool.id === 'sku' ? metrics.skuRuns : metrics.asinRuns}
+            runCount={getRunCount(tool.id)}
             onOpen={() => navigateToTool(tool.id)}
           />
         ))}
@@ -259,7 +257,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
           icon={<Activity className="h-5 w-5" />}
           tone="emerald"
         />
-
         <SummaryCard
           theme={theme}
           label="Processed Items"
@@ -268,7 +265,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
           icon={<Zap className="h-5 w-5" />}
           tone="cyan"
         />
-
         <SummaryCard
           theme={theme}
           label="Issues Found"
@@ -277,7 +273,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
           icon={<AlertTriangle className="h-5 w-5" />}
           tone="yellow"
         />
-
         <SummaryCard
           theme={theme}
           label="Completion Rate"
@@ -293,11 +288,8 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
       <section className={`rounded-2xl border p-5 shadow-lg ${panelClass}`}>
         <div className="mb-5 flex items-center gap-2">
           <ShieldCheck className="h-5 w-5 text-emerald-400" />
-
           <div>
-            <h2 className={`text-lg font-semibold ${pageText}`}>
-              Tool Usage Summary
-            </h2>
+            <h2 className={`text-lg font-semibold ${pageText}`}>Tool Usage Summary</h2>
             <p className={`text-sm ${mutedText}`}>
               Quick usage split between available operation tools.
             </p>
@@ -309,14 +301,22 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
             theme={theme}
             label="Shopkeep Consolidated Tool"
             value={metrics.skuRuns}
-            maxValue={Math.max(metrics.skuRuns, metrics.asinRuns, 1)}
+            maxValue={Math.max(metrics.skuRuns, metrics.asinRuns, metrics.basecampRuns, 1)}
+            color="emerald"
           />
-
           <UsageLine
             theme={theme}
             label="Multiple Parent ASIN"
             value={metrics.asinRuns}
-            maxValue={Math.max(metrics.skuRuns, metrics.asinRuns, 1)}
+            maxValue={Math.max(metrics.skuRuns, metrics.asinRuns, metrics.basecampRuns, 1)}
+            color="emerald"
+          />
+          <UsageLine
+            theme={theme}
+            label="Basecamp Response Generator"
+            value={metrics.basecampRuns}
+            maxValue={Math.max(metrics.skuRuns, metrics.asinRuns, metrics.basecampRuns, 1)}
+            color="violet"
           />
         </div>
       </section>
@@ -338,87 +338,100 @@ function ToolCard({
   const isDark = theme === 'dark';
 
   const accentClass =
-    tool.accent === 'green'
+    tool.accent === 'purple'
       ? isDark
-        ? 'border-emerald-500/20 bg-emerald-950/50 hover:bg-emerald-900/50'
-        : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
-      : isDark
-        ? 'border-cyan-500/20 bg-cyan-950/40 hover:bg-cyan-900/40'
-        : 'border-cyan-200 bg-cyan-50 hover:bg-cyan-100';
+        ? 'border-violet-500/20 bg-violet-950/40 hover:bg-violet-900/40'
+        : 'border-violet-200 bg-violet-50 hover:bg-violet-100'
+      : tool.accent === 'green'
+        ? isDark
+          ? 'border-emerald-500/20 bg-emerald-950/50 hover:bg-emerald-900/50'
+          : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
+        : isDark
+          ? 'border-cyan-500/20 bg-cyan-950/40 hover:bg-cyan-900/40'
+          : 'border-cyan-200 bg-cyan-50 hover:bg-cyan-100';
+
+  const badgeClass =
+    tool.status === 'Coming Soon'
+      ? isDark
+        ? 'bg-yellow-500/20 text-yellow-300'
+        : 'bg-yellow-100 text-yellow-700'
+      : tool.status === 'Active'
+        ? isDark
+          ? 'bg-emerald-500/20 text-emerald-300'
+          : 'bg-emerald-100 text-emerald-700'
+        : tool.status === 'Beta'
+          ? isDark
+            ? 'bg-cyan-500/20 text-cyan-300'
+            : 'bg-cyan-100 text-cyan-700'
+          : isDark
+            ? 'bg-slate-700/50 text-slate-300'
+            : 'bg-gray-100 text-gray-600';
+
+  const cursorClass = tool.comingSoon ? 'cursor-not-allowed opacity-75' : 'cursor-pointer';
+
+  const handleClick = () => {
+    if (!tool.comingSoon) {
+      onOpen();
+    }
+  };
 
   return (
     <button
       type="button"
-      onClick={onOpen}
-      className={`group relative min-h-[190px] rounded-2xl border p-5 text-left shadow-lg transition-all ${accentClass}`}
+      onClick={handleClick}
+      disabled={tool.comingSoon}
+      className={`group relative min-h-[190px] rounded-2xl border p-5 text-left shadow-lg transition-all ${accentClass} ${cursorClass}`}
     >
       <div className="flex h-full flex-col justify-between">
         <div>
           <div
             className={`mb-3 inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[11px] font-bold ${
-              isDark
-                ? 'bg-slate-900/50 text-slate-300'
-                : 'bg-white/70 text-gray-600'
+              isDark ? 'bg-slate-900/50 text-slate-300' : 'bg-white/70 text-gray-600'
             }`}
           >
             {tool.icon}
             {tool.category}
           </div>
 
-          <h3
-            className={`text-xl font-bold ${
-              isDark ? 'text-white' : 'text-gray-900'
-            }`}
-          >
+          <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
             {tool.title}
+            {tool.comingSoon && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-medium text-yellow-300">
+                🚀 Soon
+              </span>
+            )}
           </h3>
 
-          <p
-            className={`mt-2 max-w-xl text-sm leading-5 ${
-              isDark ? 'text-slate-300' : 'text-gray-600'
-            }`}
-          >
+          <p className={`mt-2 max-w-xl text-sm leading-5 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
             {tool.description}
           </p>
         </div>
 
         <div className="mt-8 flex items-end justify-between">
           <div>
-            <p
-              className={`text-xs ${
-                isDark ? 'text-slate-400' : 'text-gray-500'
-              }`}
-            >
-              {tool.status}
+            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${badgeClass}`}>
+                {tool.status}
+              </span>
             </p>
-
-            <p
-              className={`mt-1 text-2xl font-bold ${
-                isDark ? 'text-white' : 'text-gray-900'
-              }`}
-            >
+            <p className={`mt-1 text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
               {tool.usage}
             </p>
           </div>
 
           <div className="flex items-end gap-4">
             <div className="text-right">
-              <p
-                className={`text-xs ${
-                  isDark ? 'text-slate-400' : 'text-gray-500'
-                }`}
-              >
-                Runs
-              </p>
-
-              <p className="mt-1 text-lg font-bold text-emerald-400">
+              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Runs</p>
+              <p className={`mt-1 text-lg font-bold ${tool.accent === 'purple' ? 'text-violet-400' : 'text-emerald-400'}`}>
                 {runCount.toLocaleString()}
               </p>
             </div>
 
-            <div className="rounded-full bg-black/50 p-2 text-white transition-transform group-hover:translate-x-1">
-              <ArrowRight className="h-5 w-5" />
-            </div>
+            {!tool.comingSoon && (
+              <div className="rounded-full bg-black/50 p-2 text-white transition-transform group-hover:translate-x-1">
+                <ArrowRight className="h-5 w-5" />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -455,37 +468,20 @@ function SummaryCard({
   return (
     <div
       className={`rounded-2xl border p-5 shadow-lg ${
-        isDark
-          ? 'border-slate-700/50 bg-slate-900/60'
-          : 'border-gray-200 bg-white'
+        isDark ? 'border-slate-700/50 bg-slate-900/60' : 'border-gray-200 bg-white'
       }`}
     >
       <div className="flex items-start justify-between">
         <div>
-          <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-            {label}
-          </p>
-
-          <p
-            className={`mt-2 text-2xl font-bold ${
-              isDark ? 'text-white' : 'text-gray-900'
-            }`}
-          >
+          <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{label}</p>
+          <p className={`mt-2 text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
             {value.toLocaleString()}
             {suffix}
           </p>
         </div>
-
         <div className={`rounded-xl border p-2 ${toneClass}`}>{icon}</div>
       </div>
-
-      <p
-        className={`mt-3 text-xs ${
-          isDark ? 'text-slate-500' : 'text-gray-500'
-        }`}
-      >
-        {helper}
-      </p>
+      <p className={`mt-3 text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>{helper}</p>
     </div>
   );
 }
@@ -495,11 +491,13 @@ function UsageLine({
   label,
   value,
   maxValue,
+  color = 'emerald',
 }: {
   theme: 'light' | 'dark';
   label: string;
   value: number;
   maxValue: number;
+  color?: 'emerald' | 'violet';
 }) {
   const isDark = theme === 'dark';
   const percentage = maxValue > 0 ? Math.round((value / maxValue) * 100) : 0;
@@ -507,30 +505,18 @@ function UsageLine({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <span
-          className={`text-sm font-semibold ${
-            isDark ? 'text-slate-200' : 'text-gray-800'
-          }`}
-        >
+        <span className={`text-sm font-semibold ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>
           {label}
         </span>
-
-        <span
-          className={`text-sm ${
-            isDark ? 'text-slate-400' : 'text-gray-500'
-          }`}
-        >
+        <span className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
           {value.toLocaleString()} runs
         </span>
       </div>
-
-      <div
-        className={`h-2 overflow-hidden rounded-full ${
-          isDark ? 'bg-slate-800' : 'bg-gray-100'
-        }`}
-      >
+      <div className={`h-2 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
         <div
-          className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+          className={`h-full rounded-full transition-all duration-500 ${
+            color === 'violet' ? 'bg-violet-500' : 'bg-emerald-500'
+          }`}
           style={{ width: `${percentage}%` }}
         />
       </div>
