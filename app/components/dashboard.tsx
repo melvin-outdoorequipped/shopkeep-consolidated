@@ -1,18 +1,23 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  ArrowUpRight,
   CheckCircle2,
+  Clock,
   Database,
+  Flame,
   Loader2,
   MessageSquare,
   RefreshCw,
   SearchCheck,
   ShieldCheck,
+  TrendingUp,
   Zap,
+  Building2, // Added for Get Brand icon
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase/client';
@@ -23,7 +28,7 @@ interface DashboardProps {
 
 interface ToolRun {
   id: string;
-  tool_type: 'sku' | 'asin' | 'basecamp';
+  tool_type: 'sku' | 'asin' | 'basecamp' | 'brand'; // Added 'brand' type
   status: 'completed' | 'failed' | 'warning';
   title: string;
   description: string | null;
@@ -35,13 +40,13 @@ interface ToolRun {
 }
 
 interface ToolCardItem {
-  id: 'sku' | 'asin' | 'basecamp';
+  id: 'sku' | 'asin' | 'basecamp' | 'brand';
   category: string;
   title: string;
   description: string;
   status: string;
   usage: string;
-  accent: 'blue' | 'green' | 'purple';
+  accent: 'blue' | 'green' | 'purple' | 'orange'; // Added 'orange' accent
   icon: React.ReactNode;
   comingSoon?: boolean;
 }
@@ -81,144 +86,260 @@ const operationTools: ToolCardItem[] = [
     icon: <MessageSquare className="h-4 w-4" />,
     comingSoon: false,
   },
+  {
+  id: 'brand',
+  category: 'LISTINGS',
+  title: 'Get Brand',
+  description:
+    'Upload SKU lists and automatically retrieve the corresponding brand names for each SKU from your catalog database.',
+  status: 'Coming Soon',
+  usage: 'Unlimited',
+  accent: 'orange',
+  icon: <Building2 className="h-4 w-4" />,
+  comingSoon: true,
+  },
 ];
+
+// --- Animated Counter Hook ---
+function useAnimatedCounter(target: number, duration = 900) {
+  const [value, setValue] = useState(0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (target === 0) { setValue(0); return; }
+    const start = performance.now();
+    const animate = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(eased * target));
+      if (progress < 1) rafRef.current = requestAnimationFrame(animate);
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [target, duration]);
+
+  return value;
+}
+
+// --- Mini Sparkline SVG ---
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data, 1);
+  const w = 80, h = 28;
+  const step = w / (data.length - 1);
+  const points = data
+    .map((v, i) => `${i * step},${h - (v / max) * (h - 4)}`)
+    .join(' ');
+  const areaPoints = `0,${h} ` + points + ` ${w},${h}`;
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" className="opacity-80">
+      <defs>
+        <linearGradient id={`grad-${color}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      <polygon points={areaPoints} fill={`url(#grad-${color})`} />
+      <polyline points={points} stroke={color} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Last dot */}
+      <circle
+        cx={(data.length - 1) * step}
+        cy={h - (data[data.length - 1] / max) * (h - 4)}
+        r="2.5"
+        fill={color}
+      />
+    </svg>
+  );
+}
+
+// --- Health Score Ring ---
+function HealthRing({ score, theme }: { score: number; theme: 'light' | 'dark' }) {
+  const r = 22, cx = 28, cy = 28;
+  const circumference = 2 * Math.PI * r;
+  const dash = (score / 100) * circumference;
+  const color = score >= 80 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444';
+  const label = score >= 80 ? 'Healthy' : score >= 50 ? 'Warning' : 'Critical';
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <svg width="56" height="56" viewBox="0 0 56 56">
+        <circle cx={cx} cy={cy} r={r} stroke={theme === 'dark' ? '#1e293b' : '#e5e7eb'} strokeWidth="4" fill="none" />
+        <circle
+          cx={cx} cy={cy} r={r}
+          stroke={color} strokeWidth="4" fill="none"
+          strokeDasharray={`${dash} ${circumference}`}
+          strokeLinecap="round"
+          transform="rotate(-90 28 28)"
+          style={{ transition: 'stroke-dasharray 1s cubic-bezier(0.4,0,0.2,1)' }}
+        />
+        <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle"
+          fill={color} fontSize="11" fontWeight="700">{score}%</text>
+      </svg>
+      <span className="text-[10px] font-semibold" style={{ color }}>{label}</span>
+    </div>
+  );
+}
+
+// --- Status Dot (animated) ---
+function StatusDot({ status }: { status: ToolRun['status'] }) {
+  const color =
+    status === 'completed' ? 'bg-emerald-400' :
+    status === 'warning' ? 'bg-yellow-400' :
+    'bg-red-400';
+  return (
+    <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+      <span className={`absolute inline-flex h-full w-full rounded-full ${color} opacity-60 animate-ping`} style={{ animationDuration: '2s' }} />
+      <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${color}`} />
+    </span>
+  );
+}
+
+// --- Relative time helper ---
+function relativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 export default function Dashboard({ theme = 'dark' }: DashboardProps) {
   const [runs, setRuns] = useState<ToolRun[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
   const isDark = theme === 'dark';
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
     setErrorMessage('');
-
     const { data, error } = await supabase
       .from('tool_runs')
-      .select(
-        'id, tool_type, status, title, description, total_count, success_count, issue_count, filename, created_at'
-      )
+      .select('id, tool_type, status, title, description, total_count, success_count, issue_count, filename, created_at')
       .order('created_at', { ascending: false })
       .limit(100);
 
     if (error) {
-      console.error(error);
       setRuns([]);
       setErrorMessage(error.message);
     } else {
       setRuns((data ?? []) as ToolRun[]);
+      setLastRefreshed(new Date());
     }
-
     setIsLoading(false);
   };
 
+  useEffect(() => { fetchDashboardData(); }, []);
+
+  // Auto-refresh every 60s
   useEffect(() => {
-    fetchDashboardData();
+    const interval = setInterval(fetchDashboardData, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const metrics = useMemo(() => {
     const totalRuns = runs.length;
-
-    const completedRuns = runs.filter(
-      (run) => run.status === 'completed'
-    ).length;
-
-    const warningRuns = runs.filter(
-      (run) => run.status === 'warning'
-    ).length;
-
-    const failedRuns = runs.filter((run) => run.status === 'failed').length;
-
-    const skuRuns = runs.filter((run) => run.tool_type === 'sku').length;
-    const asinRuns = runs.filter((run) => run.tool_type === 'asin').length;
-    const basecampRuns = runs.filter(
-      (run) => run.tool_type === 'basecamp'
-    ).length;
-
-    const totalProcessed = runs.reduce(
-      (sum, run) => sum + Number(run.total_count ?? 0),
-      0
-    );
-
-    const totalSuccess = runs.reduce(
-      (sum, run) => sum + Number(run.success_count ?? 0),
-      0
-    );
-
-    const totalIssues = runs.reduce(
-      (sum, run) => sum + Number(run.issue_count ?? 0),
-      0
-    );
-
-    const completionRate =
-      totalRuns > 0 ? Math.round((completedRuns / totalRuns) * 100) : 0;
-
-    const successRate =
-      totalProcessed > 0
-        ? Math.round((totalSuccess / totalProcessed) * 100)
-        : 0;
+    const completedRuns = runs.filter(r => r.status === 'completed').length;
+    const warningRuns = runs.filter(r => r.status === 'warning').length;
+    const failedRuns = runs.filter(r => r.status === 'failed').length;
+    const skuRuns = runs.filter(r => r.tool_type === 'sku').length;
+    const asinRuns = runs.filter(r => r.tool_type === 'asin').length;
+    const basecampRuns = runs.filter(r => r.tool_type === 'basecamp').length;
+    const brandRuns = runs.filter(r => r.tool_type === 'brand').length;
+    const totalProcessed = runs.reduce((s, r) => s + Number(r.total_count ?? 0), 0);
+    const totalSuccess = runs.reduce((s, r) => s + Number(r.success_count ?? 0), 0);
+    const totalIssues = runs.reduce((s, r) => s + Number(r.issue_count ?? 0), 0);
+    const completionRate = totalRuns > 0 ? Math.round((completedRuns / totalRuns) * 100) : 0;
+    const successRate = totalProcessed > 0 ? Math.round((totalSuccess / totalProcessed) * 100) : 0;
+    const healthScore = totalRuns > 0
+      ? Math.round(((completedRuns * 1 + warningRuns * 0.5) / totalRuns) * 100)
+      : 100;
 
     return {
-      totalRuns,
-      completedRuns,
-      warningRuns,
-      failedRuns,
-      skuRuns,
-      asinRuns,
-      basecampRuns,
-      totalProcessed,
-      totalSuccess,
-      totalIssues,
-      completionRate,
-      successRate,
-      activeTools: operationTools.filter((tool) => !tool.comingSoon).length,
+      totalRuns, completedRuns, warningRuns, failedRuns,
+      skuRuns, asinRuns, basecampRuns, brandRuns,
+      totalProcessed, totalSuccess, totalIssues,
+      completionRate, successRate, healthScore,
+      activeTools: operationTools.filter(t => !t.comingSoon).length,
     };
   }, [runs]);
 
-  const navigateToTool = (toolId: 'sku' | 'asin' | 'basecamp') => {
-    window.dispatchEvent(
-      new CustomEvent('navigateToTool', {
-        detail: {
-          toolId,
-        },
-      })
-    );
+  // Sparkline data: runs per tool per day for last 7 days
+  const sparklineData = useMemo(() => {
+    const days = 7;
+    const now = Date.now();
+    const getSparkline = (toolType: string) =>
+      Array.from({ length: days }, (_, i) => {
+        const dayStart = now - (days - 1 - i) * 86400000;
+        const dayEnd = dayStart + 86400000;
+        return runs.filter(r =>
+          r.tool_type === toolType &&
+          new Date(r.created_at).getTime() >= dayStart &&
+          new Date(r.created_at).getTime() < dayEnd
+        ).length;
+      });
+    return {
+      sku: getSparkline('sku'),
+      asin: getSparkline('asin'),
+      basecamp: getSparkline('basecamp'),
+      brand: getSparkline('brand'),
+    };
+  }, [runs]);
+
+  const recentRuns = useMemo(() => runs.slice(0, 8), [runs]);
+
+  const navigateToTool = (toolId: 'sku' | 'asin' | 'basecamp' | 'brand') => {
+    window.dispatchEvent(new CustomEvent('navigateToTool', { detail: { toolId } }));
   };
 
-  const getRunCount = (id: 'sku' | 'asin' | 'basecamp') => {
-    if (id === 'sku') return metrics.skuRuns;
-    if (id === 'asin') return metrics.asinRuns;
-    return metrics.basecampRuns;
-  };
+  const getRunCount = (id: 'sku' | 'asin' | 'basecamp' | 'brand') =>
+    id === 'sku' ? metrics.skuRuns : id === 'asin' ? metrics.asinRuns : id === 'basecamp' ? metrics.basecampRuns : metrics.brandRuns;
 
-  const maxToolRuns = Math.max(
-    metrics.skuRuns,
-    metrics.asinRuns,
-    metrics.basecampRuns,
-    1
-  );
+  const getSparkline = (id: 'sku' | 'asin' | 'basecamp' | 'brand') => sparklineData[id];
 
-  const pageText = isDark ? 'text-white' : 'text-gray-900';
-  const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
+  const maxToolRuns = Math.max(metrics.skuRuns, metrics.asinRuns, metrics.basecampRuns, metrics.brandRuns, 1);
 
   const panelClass = isDark
     ? 'border-slate-700/50 bg-slate-900/70'
     : 'border-gray-200 bg-white';
 
+  const pageText = isDark ? 'text-white' : 'text-gray-900';
+  const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
+
+  const toolLabel: Record<string, string> = {
+    sku: 'Shopkeep',
+    asin: 'ASIN Checker',
+    basecamp: 'Basecamp',
+    brand: 'Get Brand',
+  };
+
   return (
     <div className="w-full max-w-full space-y-6 overflow-hidden sm:space-y-8">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <section className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <h1 className={`break-words text-xl font-bold sm:text-2xl ${pageText}`}>
-            OPERATION TOOLS
-          </h1>
-
-          <p className={`mt-2 text-sm ${mutedText}`}>
-            Current Active Tools:{' '}
-            <span className="font-semibold text-emerald-400">
-              {metrics.activeTools}
+          <div className="flex items-center gap-3">
+            <h1 className={`break-words text-xl font-bold sm:text-2xl ${pageText}`}>
+              OPERATION TOOLS
+            </h1>
+            {/* Live indicator */}
+            <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              LIVE
+            </span>
+          </div>
+          <p className={`mt-1.5 text-sm ${mutedText}`}>
+            Active Tools:{' '}
+            <span className="font-semibold text-emerald-400">{metrics.activeTools}</span>
+            <span className="mx-2 opacity-40">·</span>
+            <span className="text-xs">
+              Last synced {relativeTime(lastRefreshed.toISOString())}
             </span>
           </p>
         </div>
@@ -228,23 +349,20 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
             type="button"
             onClick={fetchDashboardData}
             disabled={isLoading}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto ${
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto ${
               isDark
-                ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700'
+                ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:border-slate-600'
                 : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
             }`}
           >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
+            {isLoading
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <RefreshCw className="h-4 w-4" />}
             Refresh
           </button>
-
           <button
             type="button"
-            className={`w-full rounded-lg px-4 py-2 text-sm font-semibold sm:w-auto ${
+            className={`w-full rounded-lg px-4 py-2 text-sm font-semibold transition-colors sm:w-auto ${
               isDark
                 ? 'bg-cyan-900/60 text-cyan-100 hover:bg-cyan-800'
                 : 'bg-cyan-100 text-cyan-800 hover:bg-cyan-200'
@@ -256,283 +374,307 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
       </section>
 
       {errorMessage && (
-        <div
-          className={`rounded-xl border px-4 py-3 text-sm ${
-            isDark
-              ? 'border-red-500/30 bg-red-600/10 text-red-400'
-              : 'border-red-300 bg-red-100 text-red-700'
-          }`}
-        >
+        <div className={`rounded-xl border px-4 py-3 text-sm ${
+          isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'
+        }`}>
           Dashboard error: {errorMessage}
         </div>
       )}
 
-      {/* Tool Cards */}
-      <section className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 2xl:grid-cols-3">
-        {operationTools.map((tool) => (
+      {/* ── Top Row: Health Score + Quick Stats ── */}
+      <section className={`rounded-2xl border p-4 shadow-lg sm:p-5 ${panelClass}`}>
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          {/* Health */}
+          <div className="flex items-center gap-5">
+            <HealthRing score={metrics.healthScore} theme={theme} />
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-widest ${mutedText}`}>System Health</p>
+              <p className={`mt-0.5 text-base font-bold ${pageText}`}>
+                {metrics.completedRuns} completed &nbsp;·&nbsp;
+                <span className="text-yellow-400">{metrics.warningRuns} warnings</span>
+                &nbsp;·&nbsp;
+                <span className="text-red-400">{metrics.failedRuns} failed</span>
+              </p>
+              <p className={`mt-1 text-xs ${mutedText}`}>Based on last {metrics.totalRuns} recorded runs</p>
+            </div>
+          </div>
+
+          {/* Quick stat pills */}
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: 'Completion', value: `${metrics.completionRate}%`, color: 'emerald' },
+              { label: 'Success Rate', value: `${metrics.successRate}%`, color: 'cyan' },
+              { label: 'Items Processed', value: metrics.totalProcessed.toLocaleString(), color: 'blue' },
+            ].map(pill => (
+              <div key={pill.label}
+                className={`rounded-xl border px-3 py-2 text-center ${
+                  isDark ? 'border-slate-700/60 bg-slate-800/60' : 'border-gray-200 bg-gray-50'
+                }`}>
+                <p className={`text-[11px] font-medium ${mutedText}`}>{pill.label}</p>
+                <p className={`mt-0.5 text-lg font-bold ${
+                  pill.color === 'emerald' ? 'text-emerald-400' :
+                  pill.color === 'cyan' ? 'text-cyan-400' : 'text-blue-400'
+                }`}>{pill.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Tool Cards ── */}
+      <section className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 2xl:grid-cols-4">
+        {operationTools.map(tool => (
           <ToolCard
             key={tool.id}
             tool={tool}
             theme={theme}
             runCount={getRunCount(tool.id)}
+            sparkline={getSparkline(tool.id)}
             onOpen={() => navigateToTool(tool.id)}
           />
         ))}
       </section>
 
-      {/* Metrics */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          theme={theme}
-          label="Total Runs"
-          value={metrics.totalRuns}
-          helper="Recorded tool activities"
-          icon={<Activity className="h-5 w-5" />}
-          tone="emerald"
-        />
-
-        <SummaryCard
-          theme={theme}
-          label="Processed Items"
-          value={metrics.totalProcessed}
-          helper="Rows, SKUs, checked pairs, and generated messages"
-          icon={<Zap className="h-5 w-5" />}
-          tone="cyan"
-        />
-
-        <SummaryCard
-          theme={theme}
-          label="Issues Found"
-          value={metrics.totalIssues}
-          helper="Conflicts, duplicates, warnings, or failed generations"
-          icon={<AlertTriangle className="h-5 w-5" />}
-          tone="yellow"
-        />
-
-        <SummaryCard
-          theme={theme}
-          label="Completion Rate"
-          value={metrics.completionRate}
-          suffix="%"
-          helper={`${metrics.completedRuns} completed runs`}
-          icon={<CheckCircle2 className="h-5 w-5" />}
-          tone="blue"
-        />
+      {/* ── Metrics Grid ── */}
+      <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <SummaryCard theme={theme} label="Total Runs" value={metrics.totalRuns}
+          helper="Recorded tool activities" icon={<Activity className="h-5 w-5" />} tone="emerald" />
+        <SummaryCard theme={theme} label="Processed Items" value={metrics.totalProcessed}
+          helper="Rows, SKUs, pairs & messages" icon={<Zap className="h-5 w-5" />} tone="cyan" />
+        <SummaryCard theme={theme} label="Issues Found" value={metrics.totalIssues}
+          helper="Conflicts, duplicates & warnings" icon={<AlertTriangle className="h-5 w-5" />} tone="yellow" />
+        <SummaryCard theme={theme} label="Completion Rate" value={metrics.completionRate} suffix="%"
+          helper={`${metrics.completedRuns} completed runs`} icon={<CheckCircle2 className="h-5 w-5" />} tone="blue" />
       </section>
 
-      {/* Usage Summary */}
-      <section className={`rounded-2xl border p-4 shadow-lg sm:p-5 ${panelClass}`}>
-        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <ShieldCheck className="h-5 w-5 flex-shrink-0 text-emerald-400" />
-          <div className="min-w-0">
-            <h2 className={`text-base font-semibold sm:text-lg ${pageText}`}>
-              Tool Usage Summary
-            </h2>
-            <p className={`text-sm ${mutedText}`}>
-              Quick usage split between available operation tools.
-            </p>
+      {/* ── Bottom Row: Usage Summary + Recent Activity ── */}
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+
+        {/* Usage bars — 2 cols */}
+        <div className={`rounded-2xl border p-4 shadow-lg sm:p-5 lg:col-span-2 ${panelClass}`}>
+          <div className="mb-5 flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 flex-shrink-0 text-emerald-400" />
+            <div>
+              <h2 className={`text-base font-semibold ${pageText}`}>Tool Usage</h2>
+              <p className={`text-xs ${mutedText}`}>Run distribution across tools</p>
+            </div>
+          </div>
+          <div className="space-y-5">
+            <UsageLine theme={theme} label="Shopkeep Consolidated" value={metrics.skuRuns} maxValue={maxToolRuns} color="cyan" />
+            <UsageLine theme={theme} label="Multiple Parent ASIN" value={metrics.asinRuns} maxValue={maxToolRuns} color="emerald" />
+            <UsageLine theme={theme} label="Basecamp Generator" value={metrics.basecampRuns} maxValue={maxToolRuns} color="violet" />
+            <UsageLine theme={theme} label="Get Brand" value={metrics.brandRuns} maxValue={maxToolRuns} color="orange" />
+          </div>
+
+          {/* Trend summary */}
+          <div className={`mt-5 rounded-xl border px-3 py-2.5 text-xs ${
+            isDark ? 'border-slate-700/40 bg-slate-800/50' : 'border-gray-100 bg-gray-50'
+          }`}>
+            <div className="flex items-center gap-2 text-emerald-400">
+              <TrendingUp className="h-3.5 w-3.5" />
+              <span className="font-semibold">7-day sparklines visible in tool cards</span>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <UsageLine
-            theme={theme}
-            label="Shopkeep Consolidated Tool"
-            value={metrics.skuRuns}
-            maxValue={maxToolRuns}
-            color="emerald"
-          />
+        {/* Recent runs — 3 cols */}
+        <div className={`rounded-2xl border p-4 shadow-lg sm:p-5 lg:col-span-3 ${panelClass}`}>
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Flame className="h-5 w-5 flex-shrink-0 text-orange-400" />
+              <div>
+                <h2 className={`text-base font-semibold ${pageText}`}>Recent Activity</h2>
+                <p className={`text-xs ${mutedText}`}>Latest tool runs</p>
+              </div>
+            </div>
+            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+              isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {recentRuns.length} shown
+            </span>
+          </div>
 
-          <UsageLine
-            theme={theme}
-            label="Multiple Parent ASIN"
-            value={metrics.asinRuns}
-            maxValue={maxToolRuns}
-            color="emerald"
-          />
+          {isLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className={`h-6 w-6 animate-spin ${mutedText}`} />
+            </div>
+          ) : recentRuns.length === 0 ? (
+            <div className={`py-10 text-center text-sm ${mutedText}`}>No activity yet</div>
+          ) : (
+            <div className="space-y-1 overflow-hidden">
+              {recentRuns.map((run, i) => (
+                <div
+                  key={run.id}
+                  className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
+                    isDark ? 'hover:bg-slate-800/60' : 'hover:bg-gray-50'
+                  }`}
+                  style={{ animationDelay: `${i * 40}ms` }}
+                >
+                  <StatusDot status={run.status} />
 
-          <UsageLine
-            theme={theme}
-            label="Basecamp Response Generator"
-            value={metrics.basecampRuns}
-            maxValue={maxToolRuns}
-            color="violet"
-          />
+                  <div className="min-w-0 flex-1">
+                    <p className={`truncate text-sm font-semibold ${pageText}`}>{run.title}</p>
+                    <p className={`truncate text-xs ${mutedText}`}>
+                      {toolLabel[run.tool_type] ?? run.tool_type}
+                      {run.total_count > 0 && ` · ${run.total_count.toLocaleString()} items`}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-shrink-0 flex-col items-end gap-0.5">
+                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                      run.status === 'completed'
+                        ? isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                        : run.status === 'warning'
+                          ? isDark ? 'bg-yellow-500/15 text-yellow-400' : 'bg-yellow-100 text-yellow-700'
+                          : isDark ? 'bg-red-500/15 text-red-400' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {run.status}
+                    </span>
+                    <span className={`flex items-center gap-0.5 text-[10px] ${mutedText}`}>
+                      <Clock className="h-3 w-3" />
+                      {relativeTime(run.created_at)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </div>
   );
 }
 
+/* ── Tool Card ── */
 function ToolCard({
-  tool,
-  theme,
-  runCount,
-  onOpen,
+  tool, theme, runCount, sparkline, onOpen,
 }: {
   tool: ToolCardItem;
   theme: 'light' | 'dark';
   runCount: number;
+  sparkline: number[];
   onOpen: () => void;
 }) {
   const isDark = theme === 'dark';
+  const animCount = useAnimatedCounter(runCount);
 
-  const accentClass =
-    tool.accent === 'purple'
-      ? isDark
-        ? 'border-violet-500/20 bg-violet-950/40 hover:bg-violet-900/40'
-        : 'border-violet-200 bg-violet-50 hover:bg-violet-100'
-      : tool.accent === 'green'
-        ? isDark
-          ? 'border-emerald-500/20 bg-emerald-950/50 hover:bg-emerald-900/50'
-          : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
-        : isDark
-          ? 'border-cyan-500/20 bg-cyan-950/40 hover:bg-cyan-900/40'
-          : 'border-cyan-200 bg-cyan-50 hover:bg-cyan-100';
+  const accentConfig = {
+    purple: {
+      card: isDark
+        ? 'border-violet-500/25 bg-violet-950/40 hover:bg-violet-900/40 hover:border-violet-500/40'
+        : 'border-violet-200 bg-violet-50 hover:bg-violet-100',
+      badge: isDark ? 'bg-violet-500/20 text-violet-300' : 'bg-violet-100 text-violet-700',
+      spark: '#8b5cf6',
+      count: 'text-violet-400',
+    },
+    green: {
+      card: isDark
+        ? 'border-emerald-500/25 bg-emerald-950/40 hover:bg-emerald-900/40 hover:border-emerald-500/40'
+        : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100',
+      badge: isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700',
+      spark: '#10b981',
+      count: 'text-emerald-400',
+    },
+    blue: {
+      card: isDark
+        ? 'border-cyan-500/25 bg-cyan-950/40 hover:bg-cyan-900/40 hover:border-cyan-500/40'
+        : 'border-cyan-200 bg-cyan-50 hover:bg-cyan-100',
+      badge: isDark ? 'bg-cyan-500/20 text-cyan-300' : 'bg-cyan-100 text-cyan-700',
+      spark: '#06b6d4',
+      count: 'text-cyan-400',
+    },
+    orange: {
+      card: isDark
+        ? 'border-orange-500/25 bg-orange-950/40 hover:bg-orange-900/40 hover:border-orange-500/40'
+        : 'border-orange-200 bg-orange-50 hover:bg-orange-100',
+      badge: isDark ? 'bg-orange-500/20 text-orange-300' : 'bg-orange-100 text-orange-700',
+      spark: '#f97316',
+      count: 'text-orange-400',
+    },
+  }[tool.accent];
 
-  const badgeClass =
-    tool.status === 'Coming Soon'
-      ? isDark
-        ? 'bg-yellow-500/20 text-yellow-300'
-        : 'bg-yellow-100 text-yellow-700'
-      : tool.status === 'Active'
-        ? isDark
-          ? 'bg-emerald-500/20 text-emerald-300'
-          : 'bg-emerald-100 text-emerald-700'
-        : tool.status === 'Beta'
-          ? isDark
-            ? 'bg-cyan-500/20 text-cyan-300'
-            : 'bg-cyan-100 text-cyan-700'
-          : isDark
-            ? 'bg-slate-700/50 text-slate-300'
-            : 'bg-gray-100 text-gray-600';
-
-  const cursorClass = tool.comingSoon
-    ? 'cursor-not-allowed opacity-75'
-    : 'cursor-pointer';
-
-  const handleClick = () => {
-    if (!tool.comingSoon) {
-      onOpen();
-    }
-  };
+  const statusBadge =
+    tool.status === 'Active' ? isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
+    : tool.status === 'Beta' ? isDark ? 'bg-cyan-500/20 text-cyan-300' : 'bg-cyan-100 text-cyan-700'
+    : tool.status === 'Coming Soon' ? isDark ? 'bg-orange-500/20 text-orange-300' : 'bg-orange-100 text-orange-700'
+    : isDark ? 'bg-yellow-500/20 text-yellow-300' : 'bg-yellow-100 text-yellow-700';
 
   return (
     <button
       type="button"
-      onClick={handleClick}
+      onClick={() => !tool.comingSoon && onOpen()}
       disabled={tool.comingSoon}
-      className={`group relative flex min-h-[210px] w-full flex-col rounded-2xl border p-4 text-left shadow-lg transition-all sm:min-h-[200px] sm:p-5 ${accentClass} ${cursorClass}`}
+      className={`group relative flex min-h-[220px] w-full flex-col rounded-2xl border p-5 text-left shadow-lg transition-all duration-200
+        ${accentConfig.card}
+        ${tool.comingSoon ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
     >
-      <div className="flex min-h-0 flex-1 flex-col justify-between">
-        <div className="min-w-0">
-          <div
-            className={`mb-3 inline-flex max-w-full items-center gap-2 rounded-full px-2.5 py-1 text-[11px] font-bold ${
-              isDark
-                ? 'bg-slate-900/50 text-slate-300'
-                : 'bg-white/70 text-gray-600'
-            }`}
-          >
-            <span className="flex-shrink-0">{tool.icon}</span>
-            <span className="truncate">{tool.category}</span>
-          </div>
+      {/* Top row */}
+      <div className="flex items-start justify-between gap-2">
+        <div className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+          isDark ? 'bg-slate-900/50 text-slate-300' : 'bg-white/70 text-gray-600'
+        }`}>
+          <span className="flex-shrink-0">{tool.icon}</span>
+          <span className="truncate">{tool.category}</span>
+        </div>
+        {/* Sparkline */}
+        <div className="flex-shrink-0 pt-0.5">
+          <Sparkline data={sparkline} color={accentConfig.spark} />
+        </div>
+      </div>
 
-          <h3
-            className={`break-words text-lg font-bold sm:text-xl ${
-              isDark ? 'text-white' : 'text-gray-900'
-            }`}
-          >
-            {tool.title}
-            {tool.comingSoon && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-medium text-yellow-300">
-                🚀 Soon
-              </span>
-            )}
-          </h3>
+      {/* Title + desc */}
+      <div className="mt-3 min-w-0 flex-1">
+        <h3 className={`break-words text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          {tool.title}
+          {tool.comingSoon && (
+            <span className="ml-2 inline-flex items-center rounded-full bg-orange-500/20 px-2 py-0.5 text-xs font-medium text-orange-300">
+              🚀 Soon
+            </span>
+          )}
+        </h3>
+        <p className={`mt-1.5 line-clamp-3 text-sm leading-5 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
+          {tool.description}
+        </p>
+      </div>
 
-          <p
-            className={`mt-2 line-clamp-4 text-sm leading-5 ${
-              isDark ? 'text-slate-300' : 'text-gray-600'
-            }`}
-          >
-            {tool.description}
+      {/* Footer row */}
+      <div className="mt-5 flex items-end justify-between gap-3">
+        <div>
+          <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${statusBadge}`}>
+            {tool.status}
+          </span>
+          <p className={`mt-1.5 text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+            {tool.usage} usage
           </p>
         </div>
 
-        <div className="mt-6 flex items-end justify-between gap-4">
-          <div className="min-w-0">
-            <p
-              className={`text-xs ${
-                isDark ? 'text-slate-400' : 'text-gray-500'
-              }`}
-            >
-              <span
-                className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${badgeClass}`}
-              >
-                {tool.status}
-              </span>
-            </p>
-
-            <p
-              className={`mt-1 truncate text-xl font-bold sm:text-2xl ${
-                isDark ? 'text-white' : 'text-gray-900'
-              }`}
-            >
-              {tool.usage}
+        <div className="flex flex-shrink-0 items-end gap-4">
+          <div className="text-right">
+            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Runs</p>
+            <p className={`mt-0.5 text-xl font-bold tabular-nums ${accentConfig.count}`}>
+              {animCount.toLocaleString()}
             </p>
           </div>
-
-          <div className="flex flex-shrink-0 items-end gap-3 sm:gap-4">
-            <div className="text-right">
-              <p
-                className={`text-xs ${
-                  isDark ? 'text-slate-400' : 'text-gray-500'
-                }`}
-              >
-                Runs
-              </p>
-
-              <p
-                className={`mt-1 text-base font-bold sm:text-lg ${
-                  tool.accent === 'purple'
-                    ? 'text-violet-400'
-                    : 'text-emerald-400'
-                }`}
-              >
-                {runCount.toLocaleString()}
-              </p>
+          {!tool.comingSoon && (
+            <div className={`rounded-full bg-black/40 p-2 text-white transition-all duration-200 group-hover:translate-x-1 group-hover:bg-black/60`}>
+              <ArrowRight className="h-4 w-4" />
             </div>
-
-            {!tool.comingSoon && (
-              <div className="rounded-full bg-black/50 p-2 text-white transition-transform group-hover:translate-x-1">
-                <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </button>
   );
 }
 
+/* ── Summary Card ── */
 function SummaryCard({
-  theme,
-  label,
-  value,
-  suffix = '',
-  helper,
-  icon,
-  tone,
+  theme, label, value, suffix = '', helper, icon, tone,
 }: {
-  theme: 'light' | 'dark';
-  label: string;
-  value: number;
-  suffix?: string;
-  helper: string;
-  icon: React.ReactNode;
-  tone: 'emerald' | 'cyan' | 'yellow' | 'blue';
+  theme: 'light' | 'dark'; label: string; value: number; suffix?: string;
+  helper: string; icon: React.ReactNode; tone: 'emerald' | 'cyan' | 'yellow' | 'blue';
 }) {
   const isDark = theme === 'dark';
+  const animValue = useAnimatedCounter(value);
 
   const toneClass = {
     emerald: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400',
@@ -542,93 +684,60 @@ function SummaryCard({
   }[tone];
 
   return (
-    <div
-      className={`rounded-2xl border p-4 shadow-lg sm:p-5 ${
-        isDark
-          ? 'border-slate-700/50 bg-slate-900/60'
-          : 'border-gray-200 bg-white'
-      }`}
-    >
+    <div className={`rounded-2xl border p-4 shadow-lg sm:p-5 ${
+      isDark ? 'border-slate-700/50 bg-slate-900/60' : 'border-gray-200 bg-white'
+    }`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-            {label}
-          </p>
-
-          <p
-            className={`mt-2 break-words text-xl font-bold sm:text-2xl ${
-              isDark ? 'text-white' : 'text-gray-900'
-            }`}
-          >
-            {value.toLocaleString()}
-            {suffix}
+          <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{label}</p>
+          <p className={`mt-2 break-words text-2xl font-bold tabular-nums sm:text-3xl ${
+            isDark ? 'text-white' : 'text-gray-900'
+          }`}>
+            {animValue.toLocaleString()}{suffix}
           </p>
         </div>
-
-        <div className={`flex-shrink-0 rounded-xl border p-2 ${toneClass}`}>
-          {icon}
-        </div>
+        <div className={`flex-shrink-0 rounded-xl border p-2 ${toneClass}`}>{icon}</div>
       </div>
-
-      <p
-        className={`mt-3 text-xs leading-5 ${
-          isDark ? 'text-slate-500' : 'text-gray-500'
-        }`}
-      >
-        {helper}
-      </p>
+      <div className="mt-3 flex items-center gap-1.5">
+        <ArrowUpRight className={`h-3 w-3 flex-shrink-0 ${
+          tone === 'yellow' ? 'text-yellow-400' : 'text-emerald-400'
+        }`} />
+        <p className={`text-xs leading-5 ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>{helper}</p>
+      </div>
     </div>
   );
 }
 
+/* ── Usage Line ── */
 function UsageLine({
-  theme,
-  label,
-  value,
-  maxValue,
-  color = 'emerald',
+  theme, label, value, maxValue, color = 'emerald',
 }: {
-  theme: 'light' | 'dark';
-  label: string;
-  value: number;
-  maxValue: number;
-  color?: 'emerald' | 'violet';
+  theme: 'light' | 'dark'; label: string; value: number; maxValue: number;
+  color?: 'emerald' | 'cyan' | 'violet' | 'orange';
 }) {
   const isDark = theme === 'dark';
   const percentage = maxValue > 0 ? Math.round((value / maxValue) * 100) : 0;
+  const barColor = color === 'violet' ? 'bg-violet-500' : color === 'cyan' ? 'bg-cyan-500' : color === 'orange' ? 'bg-orange-500' : 'bg-emerald-500';
 
   return (
     <div>
-      <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <span
-          className={`break-words text-sm font-semibold ${
-            isDark ? 'text-slate-200' : 'text-gray-800'
-          }`}
-        >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className={`truncate text-sm font-semibold ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>
           {label}
         </span>
-
-        <span
-          className={`text-sm ${
-            isDark ? 'text-slate-400' : 'text-gray-500'
-          }`}
-        >
+        <span className={`flex-shrink-0 text-sm tabular-nums ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
           {value.toLocaleString()} runs
         </span>
       </div>
-
-      <div
-        className={`h-2 overflow-hidden rounded-full ${
-          isDark ? 'bg-slate-800' : 'bg-gray-100'
-        }`}
-      >
+      <div className={`h-2 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
         <div
-          className={`h-full rounded-full transition-all duration-500 ${
-            color === 'violet' ? 'bg-violet-500' : 'bg-emerald-500'
-          }`}
+          className={`h-full rounded-full transition-all duration-700 ${barColor}`}
           style={{ width: `${percentage}%` }}
         />
       </div>
+      <p className={`mt-1 text-right text-[10px] tabular-nums ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+        {percentage}% of peak
+      </p>
     </div>
   );
 }

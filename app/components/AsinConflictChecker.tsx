@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle,
@@ -8,6 +8,7 @@ import {
   Download,
   FileText,
   HelpCircle,
+  Keyboard,
   Loader2,
   Play,
   Trash2,
@@ -77,15 +78,9 @@ function splitLines(value: string): string[] {
 
 function csvEscape(value: string): string {
   const safeValue = value ?? '';
-
-  if (
-    safeValue.includes(',') ||
-    safeValue.includes('"') ||
-    safeValue.includes('\n')
-  ) {
+  if (safeValue.includes(',') || safeValue.includes('"') || safeValue.includes('\n')) {
     return `"${safeValue.replace(/"/g, '""')}"`;
   }
-
   return safeValue;
 }
 
@@ -93,99 +88,96 @@ function buildPairs(stylesInput: string, asinsInput: string) {
   const stylesArray = splitLines(stylesInput);
   const asinsArray = splitLines(asinsInput);
   const maxRows = Math.max(stylesArray.length, asinsArray.length);
-
   const pairs: StyleAsinPair[] = [];
   let ignoredRows = 0;
 
-  for (let index = 0; index < maxRows; index += 1) {
-    const style = stylesArray[index]?.trim() ?? '';
-    const asin = asinsArray[index]?.trim() ?? '';
-
-    if (style && asin) {
-      pairs.push({ style, asin });
-    } else if (style || asin) {
-      ignoredRows += 1;
-    }
+  for (let i = 0; i < maxRows; i++) {
+    const style = stylesArray[i]?.trim() ?? '';
+    const asin = asinsArray[i]?.trim() ?? '';
+    if (style && asin) pairs.push({ style, asin });
+    else if (style || asin) ignoredRows++;
   }
-
-  return {
-    pairs,
-    totalRows: maxRows,
-    ignoredRows,
-  };
+  return { pairs, totalRows: maxRows, ignoredRows };
 }
 
 function findConflicts(pairs: StyleAsinPair[]): Conflict[] {
   const styleMap = new Map<string, Set<string>>();
-
   pairs.forEach(({ style, asin }) => {
-    if (!styleMap.has(style)) {
-      styleMap.set(style, new Set<string>());
-    }
-
+    if (!styleMap.has(style)) styleMap.set(style, new Set());
     styleMap.get(style)?.add(asin);
   });
-
   return Array.from(styleMap.entries())
-    .filter(([, asinsSet]) => asinsSet.size > 1)
-    .map(([style, asinsSet]) => ({
-      style,
-      asins: Array.from(asinsSet).sort(),
-    }))
-    .sort((first, second) => first.style.localeCompare(second.style));
+    .filter(([, set]) => set.size > 1)
+    .map(([style, set]) => ({ style, asins: Array.from(set).sort() }))
+    .sort((a, b) => a.style.localeCompare(b.style));
 }
 
-export default function AsinConflictChecker({
-  theme = 'dark',
-}: AsinConflictCheckerProps) {
+// Line number gutter component
+function LineGutter({ text, isDark }: { text: string; isDark: boolean }) {
+  const lines = text ? splitLines(text) : [];
+  const count = Math.max(lines.length, 1);
+
+  return (
+    <div
+      className={`hidden select-none px-2 py-4 text-right font-mono text-[11px] leading-[1.625rem] md:flex md:flex-col ${
+        isDark ? 'text-slate-700 bg-slate-900/40' : 'text-gray-300 bg-gray-50'
+      }`}
+      style={{ minWidth: '2.2rem' }}
+    >
+      {Array.from({ length: count }, (_, i) => (
+        <span key={i}>{i + 1}</span>
+      ))}
+    </div>
+  );
+}
+
+export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictCheckerProps) {
   const [stylesInput, setStylesInput] = useState('');
   const [asinsInput, setAsinsInput] = useState('');
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [isChecking, setIsChecking] = useState(false);
-  const [lastRan, setLastRan] = useState<{ date: string; time: string } | null>(
-    null
-  );
+  const [lastRan, setLastRan] = useState<{ date: string; time: string } | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [stats, setStats] = useState<RunStats | null>(null);
+  const [scrollPct, setScrollPct] = useState(0);
 
-  const stylesTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const asinsTextareaRef = useRef<HTMLTextAreaElement>(null);
-
+  const stylesRef = useRef<HTMLTextAreaElement>(null);
+  const asinsRef = useRef<HTMLTextAreaElement>(null);
   const isDark = theme === 'dark';
 
-  const stylesLineCount = useMemo(
-    () => (stylesInput.trim() ? splitLines(stylesInput).length : 0),
-    [stylesInput]
-  );
-
-  const asinsLineCount = useMemo(
-    () => (asinsInput.trim() ? splitLines(asinsInput).length : 0),
-    [asinsInput]
-  );
-
+  const stylesLineCount = useMemo(() => stylesInput.trim() ? splitLines(stylesInput).length : 0, [stylesInput]);
+  const asinsLineCount = useMemo(() => asinsInput.trim() ? splitLines(asinsInput).length : 0, [asinsInput]);
   const hasInput = stylesInput.trim().length > 0 || asinsInput.trim().length > 0;
+  const hasBothInputs = stylesInput.trim().length > 0 && asinsInput.trim().length > 0;
+  const lineCountMismatch = stylesLineCount > 0 && asinsLineCount > 0 && stylesLineCount !== asinsLineCount;
+  const maxAsins = conflicts.length > 0 ? Math.max(...conflicts.map(c => c.asins.length)) : 0;
 
-  const hasBothInputs =
-    stylesInput.trim().length > 0 && asinsInput.trim().length > 0;
-
-  const lineCountMismatch =
-    stylesLineCount > 0 &&
-    asinsLineCount > 0 &&
-    stylesLineCount !== asinsLineCount;
-
-  const maxAsins =
-    conflicts.length > 0
-      ? Math.max(...conflicts.map((conflict) => conflict.asins.length))
-      : 0;
+  // Keyboard shortcut: ⌘Enter to run
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && hasBothInputs && !isChecking) {
+        e.preventDefault();
+        handleRun();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [hasBothInputs, isChecking, stylesInput, asinsInput]);
 
   const showFeedback = (type: FeedbackType, message: string) => {
     setFeedback({ type, message });
-
-    window.setTimeout(() => {
-      setFeedback(null);
-    }, 3000);
+    setTimeout(() => setFeedback(null), 3500);
   };
+
+  const syncScroll = useCallback((source: 'styles' | 'asins') => {
+    const src = source === 'styles' ? stylesRef.current : asinsRef.current;
+    const dst = source === 'styles' ? asinsRef.current : stylesRef.current;
+    if (!src || !dst) return;
+    const pct = src.scrollTop / (src.scrollHeight - src.clientHeight || 1);
+    setScrollPct(pct * 100);
+    dst.scrollTop = src.scrollTop;
+  }, []);
 
   const loadSampleData = () => {
     setStylesInput(sampleStyles);
@@ -197,200 +189,86 @@ export default function AsinConflictChecker({
   };
 
   const handleRun = async () => {
-    if (!hasBothInputs) {
-      showFeedback('error', 'Please provide both Style IDs and Parent ASINs.');
-      return;
-    }
-
+    if (!hasBothInputs) { showFeedback('error', 'Provide both Style IDs and Parent ASINs.'); return; }
     setIsChecking(true);
     setFeedback(null);
 
     try {
-      const { pairs, totalRows, ignoredRows } = buildPairs(
-        stylesInput,
-        asinsInput
-      );
-
-      if (pairs.length === 0) {
-        setConflicts([]);
-        setStats(null);
-        showFeedback('error', 'No valid Style-ASIN pairs were found.');
-        return;
-      }
+      const { pairs, totalRows, ignoredRows } = buildPairs(stylesInput, asinsInput);
+      if (pairs.length === 0) { setConflicts([]); setStats(null); showFeedback('error', 'No valid Style-ASIN pairs found.'); return; }
 
       const result = findConflicts(pairs);
-      const uniqueStyles = new Set(pairs.map((pair) => pair.style)).size;
-
-      const runStats: RunStats = {
-        totalRows,
-        validPairs: pairs.length,
-        ignoredRows,
-        uniqueStyles,
-      };
+      const uniqueStyles = new Set(pairs.map(p => p.style)).size;
+      const runStats: RunStats = { totalRows, validPairs: pairs.length, ignoredRows, uniqueStyles };
 
       setConflicts(result);
       setStats(runStats);
-
-      const now = new Date();
-
       setLastRan({
-        date: now.toISOString().split('T')[0],
-        time: now.toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        }),
+        date: new Date().toISOString().split('T')[0],
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       });
 
       await supabase.from('asin_checks').insert({
-        total_rows: totalRows,
-        valid_pairs: pairs.length,
-        ignored_rows: ignoredRows,
-        conflict_count: result.length,
-        conflicts: result,
-        status: 'completed',
+        total_rows: totalRows, valid_pairs: pairs.length, ignored_rows: ignoredRows,
+        conflict_count: result.length, conflicts: result, status: 'completed',
       });
 
       await logToolRun({
         toolType: 'asin',
         status: result.length > 0 ? 'warning' : 'completed',
         title: 'ASIN conflict check completed',
-        description:
-          result.length > 0
-            ? `${result.length} conflict${result.length === 1 ? '' : 's'} found.`
-            : 'No conflicts found.',
-        totalCount: pairs.length,
-        successCount: pairs.length - result.length,
-        issueCount: result.length,
-        metadata: {
-          totalRows,
-          validPairs: pairs.length,
-          ignoredRows,
-          uniqueStyles,
-          conflicts: result,
-        },
+        description: result.length > 0 ? `${result.length} conflict${result.length === 1 ? '' : 's'} found.` : 'No conflicts found.',
+        totalCount: pairs.length, successCount: pairs.length - result.length, issueCount: result.length,
+        metadata: { totalRows, validPairs: pairs.length, ignoredRows, uniqueStyles, conflicts: result },
       });
 
-      showFeedback(
-        result.length > 0 ? 'error' : 'success',
-        result.length > 0
-          ? `${result.length} conflict${result.length === 1 ? '' : 's'} found.`
-          : 'No conflicts found.'
-      );
+      showFeedback(result.length > 0 ? 'error' : 'success',
+        result.length > 0 ? `${result.length} conflict${result.length === 1 ? '' : 's'} found.` : 'No conflicts found.');
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'ASIN check failed.';
-
-      await supabase.from('asin_checks').insert({
-        total_rows: 0,
-        valid_pairs: 0,
-        ignored_rows: 0,
-        conflict_count: 0,
-        conflicts: [],
-        status: 'failed',
-      });
-
-      await logToolRun({
-        toolType: 'asin',
-        status: 'failed',
-        title: 'ASIN conflict check failed',
-        description: message,
-        totalCount: 0,
-        successCount: 0,
-        issueCount: 0,
-        metadata: {
-          error: message,
-        },
-      });
-
+      const message = error instanceof Error ? error.message : 'ASIN check failed.';
+      await supabase.from('asin_checks').insert({ total_rows: 0, valid_pairs: 0, ignored_rows: 0, conflict_count: 0, conflicts: [], status: 'failed' });
+      await logToolRun({ toolType: 'asin', status: 'failed', title: 'ASIN conflict check failed', description: message, totalCount: 0, successCount: 0, issueCount: 0, metadata: { error: message } });
       showFeedback('error', message);
     } finally {
       setIsChecking(false);
     }
   };
 
-  const handleClear = () => {
-    setStylesInput('');
-    setAsinsInput('');
-    setConflicts([]);
-    setLastRan(null);
-    setStats(null);
-    setFeedback(null);
-  };
+  const handleClear = () => { setStylesInput(''); setAsinsInput(''); setConflicts([]); setLastRan(null); setStats(null); setFeedback(null); };
 
   const handleCopyResults = async () => {
     if (conflicts.length === 0) return;
-
     try {
-      const headerColumns = [
-        'Style',
-        ...Array.from(
-          { length: maxAsins },
-          (_, index) => `Parent ASIN ${index + 1}`
-        ),
-      ];
-
-      const rows = conflicts.map((conflict) => [
-        conflict.style,
-        ...conflict.asins,
-      ]);
-
-      const copyText = [headerColumns, ...rows]
-        .map((row) => row.join('\t'))
-        .join('\n');
-
-      await navigator.clipboard.writeText(copyText);
+      const headers = ['Style', ...Array.from({ length: maxAsins }, (_, i) => `Parent ASIN ${i + 1}`)];
+      const rows = conflicts.map(c => [c.style, ...c.asins]);
+      await navigator.clipboard.writeText([headers, ...rows].map(r => r.join('\t')).join('\n'));
       showFeedback('success', 'Results copied to clipboard.');
-    } catch {
-      showFeedback('error', 'Unable to copy results.');
-    }
+    } catch { showFeedback('error', 'Unable to copy results.'); }
   };
 
   const handleExportCSV = () => {
     if (conflicts.length === 0) return;
-
-    const headers = [
-      'Style',
-      ...Array.from(
-        { length: maxAsins },
-        (_, index) => `Parent ASIN ${index + 1}`
-      ),
-    ];
-
-    const rows = conflicts.map((conflict) => [
-      conflict.style,
-      ...conflict.asins,
-    ]);
-
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map(csvEscape).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], {
-      type: 'text/csv;charset=utf-8;',
-    });
-
+    const headers = ['Style', ...Array.from({ length: maxAsins }, (_, i) => `Parent ASIN ${i + 1}`)];
+    const rows = conflicts.map(c => [c.style, ...c.asins]);
+    const csv = [headers, ...rows].map(r => r.map(csvEscape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-
-    anchor.href = url;
-    anchor.download = `asin-conflicts-${new Date().toISOString().split('T')[0]}.csv`;
-    anchor.click();
-
+    const a = document.createElement('a');
+    a.href = url; a.download = `asin-conflicts-${new Date().toISOString().split('T')[0]}.csv`; a.click();
     URL.revokeObjectURL(url);
-    showFeedback('success', 'CSV exported successfully.');
+    showFeedback('success', 'CSV exported.');
   };
 
-  const cardClass = isDark
-    ? 'bg-slate-900/50 border-slate-700/50'
-    : 'bg-white/70 border-gray-300/60';
+  // Severity badge
+  const getSeverity = (asinCount: number) =>
+    asinCount >= 4 ? { label: 'Critical', cls: isDark ? 'bg-red-500/20 text-red-300 border-red-500/30' : 'bg-red-100 text-red-700 border-red-300' }
+    : asinCount === 3 ? { label: 'High', cls: isDark ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' : 'bg-orange-100 text-orange-700 border-orange-300' }
+    : { label: 'Medium', cls: isDark ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : 'bg-yellow-100 text-yellow-700 border-yellow-300' };
 
-  const panelHeaderClass = isDark
-    ? 'bg-slate-800/50 border-slate-700'
-    : 'bg-gray-100/70 border-gray-300';
-
-  const mutedTextClass = isDark ? 'text-slate-400' : 'text-gray-600';
-  const strongTextClass = isDark ? 'text-white' : 'text-gray-900';
+  const cardClass = isDark ? 'bg-slate-900/50 border-slate-700/50' : 'bg-white/70 border-gray-300/60';
+  const panelHeaderClass = isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-gray-100/70 border-gray-300';
+  const mutedText = isDark ? 'text-slate-400' : 'text-gray-600';
+  const strongText = isDark ? 'text-white' : 'text-gray-900';
 
   return (
     <div className="flex h-full w-full max-w-full flex-col overflow-hidden">
@@ -398,67 +276,53 @@ export default function AsinConflictChecker({
       <div className="mb-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h2
-              className={`mb-1 break-words text-xl font-bold sm:text-2xl ${strongTextClass}`}
-            >
+            <h2 className={`mb-1 break-words text-xl font-bold sm:text-2xl ${strongText}`}>
               Multiple Parent ASIN Checker
             </h2>
-            <p className={`max-w-3xl text-sm leading-6 ${mutedTextClass}`}>
-              Identify styles that have multiple unique parent ASINs mapped to
-              them.
+            <p className={`max-w-3xl text-sm leading-6 ${mutedText}`}>
+              Identify styles that have multiple unique parent ASINs mapped to them.
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setShowHelp((current) => !current)}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:w-auto ${
-              isDark
-                ? 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/60'
-                : 'bg-gray-200/70 text-gray-700 hover:bg-gray-300/70'
-            }`}
-          >
-            <HelpCircle className="h-4 w-4" />
-            Help
-          </button>
-        </div>
-
-        {showHelp && (
-          <div
-            className={`mt-4 rounded-xl border p-4 ${
-              isDark
-                ? 'border-emerald-500/20 bg-emerald-600/10'
-                : 'border-emerald-300/60 bg-emerald-100/60'
-            }`}
-          >
-            <h3
-              className={`mb-3 flex items-center gap-2 font-semibold ${
-                isDark ? 'text-emerald-400' : 'text-emerald-700'
+          <div className="flex gap-2">
+            {/* Keyboard shortcut hint */}
+            <div className={`hidden items-center gap-1.5 rounded-lg border px-3 py-2 text-xs sm:flex ${
+              isDark ? 'border-slate-700 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-50 text-gray-400'
+            }`}>
+              <Keyboard className="h-3.5 w-3.5" />
+              <kbd className="font-semibold">⌘↵</kbd>
+              <span>to run</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowHelp(c => !c)}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isDark ? 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/60' : 'bg-gray-200/70 text-gray-700 hover:bg-gray-300/70'
               }`}
             >
               <HelpCircle className="h-4 w-4" />
-              How to use this tool
-            </h3>
+              Help
+            </button>
+          </div>
+        </div>
 
-            <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+        {showHelp && (
+          <div className={`mt-4 rounded-xl border p-4 ${isDark ? 'border-emerald-500/20 bg-emerald-600/10' : 'border-emerald-300/60 bg-emerald-100/60'}`}>
+            <h3 className={`mb-3 flex items-center gap-2 font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+              <HelpCircle className="h-4 w-4" />
+              How to use
+            </h3>
+            <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
               {[
                 'Paste your Style IDs in the left column.',
                 'Paste corresponding Parent ASINs in the right column.',
                 'Each row represents one Style-ASIN pair.',
-                'Click Run Check to scan for conflicts.',
+                'Press ⌘↵ or click Run Check to scan.',
                 'Duplicate ASINs for the same style are ignored.',
                 'Results are saved to Supabase activity logs.',
-              ].map((instruction, index) => (
-                <div
-                  key={instruction}
-                  className={`flex items-start gap-2 ${
-                    isDark ? 'text-slate-300' : 'text-gray-700'
-                  }`}
-                >
-                  <span className="font-bold text-emerald-500">
-                    {index + 1}.
-                  </span>
-                  <span>{instruction}</span>
+              ].map((tip, i) => (
+                <div key={tip} className={`flex items-start gap-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                  <span className="font-bold text-emerald-500">{i + 1}.</span>
+                  <span>{tip}</span>
                 </div>
               ))}
             </div>
@@ -468,38 +332,22 @@ export default function AsinConflictChecker({
 
       {/* Feedback */}
       {feedback && (
-        <div
-          className={`mb-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${
-            feedback.type === 'success'
-              ? isDark
-                ? 'border-emerald-500/30 bg-emerald-600/10 text-emerald-400'
-                : 'border-emerald-300 bg-emerald-100 text-emerald-700'
-              : feedback.type === 'error'
-                ? isDark
-                  ? 'border-red-500/30 bg-red-600/10 text-red-400'
-                  : 'border-red-300 bg-red-100 text-red-700'
-                : isDark
-                  ? 'border-blue-500/30 bg-blue-600/10 text-blue-400'
-                  : 'border-blue-300 bg-blue-100 text-blue-700'
-          }`}
-        >
-          {feedback.type === 'success' ? (
-            <CheckCircle className="h-4 w-4 flex-shrink-0" />
-          ) : (
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          )}
-          <span>{feedback.message}</span>
+        <div className={`mb-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-all ${
+          feedback.type === 'success'
+            ? isDark ? 'border-emerald-500/30 bg-emerald-600/10 text-emerald-400' : 'border-emerald-300 bg-emerald-100 text-emerald-700'
+            : feedback.type === 'error'
+              ? isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'
+              : isDark ? 'border-blue-500/30 bg-blue-600/10 text-blue-400' : 'border-blue-300 bg-blue-100 text-blue-700'
+        }`}>
+          {feedback.type === 'success' ? <CheckCircle className="h-4 w-4 flex-shrink-0" /> : <AlertCircle className="h-4 w-4 flex-shrink-0" />}
+          {feedback.message}
         </div>
       )}
 
-      {/* Main Card */}
-      <div
-        className={`flex flex-1 flex-col overflow-hidden rounded-xl border ${cardClass}`}
-      >
-        {/* Action Bar */}
-        <div
-          className={`flex flex-col gap-3 border-b p-4 xl:flex-row xl:items-center xl:justify-between ${panelHeaderClass}`}
-        >
+      {/* Main card */}
+      <div className={`flex flex-1 flex-col overflow-hidden rounded-xl border ${cardClass}`}>
+        {/* Action bar */}
+        <div className={`flex flex-col gap-3 border-b p-4 xl:flex-row xl:items-center xl:justify-between ${panelHeaderClass}`}>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap">
             <button
               type="button"
@@ -507,306 +355,200 @@ export default function AsinConflictChecker({
               disabled={!hasBothInputs || isChecking}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isChecking ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Play className="h-4 w-4 fill-current" />
-              )}
+              {isChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
               {isChecking ? 'Checking...' : 'Run Check'}
             </button>
-
             <button
-              type="button"
-              onClick={handleClear}
-              disabled={!hasInput && conflicts.length === 0}
-              className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                isDark
-                  ? 'border-red-600/30 bg-red-600/20 text-red-400 hover:bg-red-600/30'
-                  : 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200'
+              type="button" onClick={handleClear} disabled={!hasInput && conflicts.length === 0}
+              className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                isDark ? 'border-red-600/30 bg-red-600/20 text-red-400 hover:bg-red-600/30' : 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200'
               }`}
             >
-              <Trash2 className="h-4 w-4" />
-              Clear All
+              <Trash2 className="h-4 w-4" />Clear All
             </button>
-
             {conflicts.length > 0 && (
               <>
-                <button
-                  type="button"
-                  onClick={handleCopyResults}
-                  className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${
-                    isDark
-                      ? 'border-blue-600/30 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
-                      : 'border-blue-300 bg-blue-100 text-blue-700 hover:bg-blue-200'
-                  }`}
-                >
-                  <Copy className="h-4 w-4" />
-                  Copy Results
+                <button type="button" onClick={handleCopyResults} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${isDark ? 'border-blue-600/30 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30' : 'border-blue-300 bg-blue-100 text-blue-700 hover:bg-blue-200'}`}>
+                  <Copy className="h-4 w-4" />Copy
                 </button>
-
-                <button
-                  type="button"
-                  onClick={handleExportCSV}
-                  className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${
-                    isDark
-                      ? 'border-purple-600/30 bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
-                      : 'border-purple-300 bg-purple-100 text-purple-700 hover:bg-purple-200'
-                  }`}
-                >
-                  <Download className="h-4 w-4" />
-                  Export CSV
+                <button type="button" onClick={handleExportCSV} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${isDark ? 'border-purple-600/30 bg-purple-600/20 text-purple-400 hover:bg-purple-600/30' : 'border-purple-300 bg-purple-100 text-purple-700 hover:bg-purple-200'}`}>
+                  <Download className="h-4 w-4" />Export CSV
                 </button>
               </>
             )}
           </div>
-
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between xl:justify-end">
-            <button
-              type="button"
-              onClick={loadSampleData}
-              className={`inline-flex items-center justify-center gap-2 text-sm ${
-                isDark
-                  ? 'text-slate-400 hover:text-slate-200'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <FileText className="h-4 w-4" />
-              Load Sample
+            <button type="button" onClick={loadSampleData} className={`inline-flex items-center gap-2 text-sm ${isDark ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-900'}`}>
+              <FileText className="h-4 w-4" />Load Sample
             </button>
-
             {lastRan && (
-              <div
-                className={`text-center text-xs sm:text-left ${
-                  isDark ? 'text-slate-400' : 'text-gray-600'
-                }`}
-              >
-                Last run:{' '}
-                <span className="font-mono text-cyan-500">
-                  {lastRan.date} {lastRan.time}
-                </span>
-              </div>
+              <span className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
+                Last run: <span className="font-mono text-cyan-500">{lastRan.date} {lastRan.time}</span>
+              </span>
             )}
           </div>
         </div>
 
-        {/* Warning */}
+        {/* Sync scroll progress bar */}
+        {(stylesInput || asinsInput) && (
+          <div className={`h-0.5 w-full ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
+            <div
+              className="h-full bg-emerald-500 transition-all duration-100"
+              style={{ width: `${scrollPct}%` }}
+            />
+          </div>
+        )}
+
+        {/* Mismatch warning */}
         {lineCountMismatch && (
-          <div
-            className={`border-b px-4 py-2 text-xs ${
-              isDark
-                ? 'border-yellow-500/20 bg-yellow-600/10 text-yellow-400'
-                : 'border-yellow-300 bg-yellow-100 text-yellow-800'
-            }`}
-          >
-            Warning: Style rows and ASIN rows do not match. Rows with missing
-            values will be ignored.
+          <div className={`border-b px-4 py-2 text-xs ${isDark ? 'border-yellow-500/20 bg-yellow-600/10 text-yellow-400' : 'border-yellow-300 bg-yellow-100 text-yellow-800'}`}>
+            ⚠ Style rows ({stylesLineCount}) and ASIN rows ({asinsLineCount}) don't match — mismatched rows will be ignored.
           </div>
         )}
 
         {/* Stats */}
         {stats && (
-          <div
-            className={`grid grid-cols-2 gap-2 border-b p-4 text-sm sm:grid-cols-4 ${
-              isDark ? 'border-slate-700' : 'border-gray-300'
-            }`}
-          >
+          <div className={`grid grid-cols-2 gap-2 border-b p-4 sm:grid-cols-4 ${isDark ? 'border-slate-700' : 'border-gray-300'}`}>
             <StatCard label="Total Rows" value={stats.totalRows} theme={theme} />
             <StatCard label="Valid Pairs" value={stats.validPairs} theme={theme} />
-            <StatCard
-              label="Unique Styles"
-              value={stats.uniqueStyles}
-              theme={theme}
-            />
-            <StatCard
-              label="Ignored Rows"
-              value={stats.ignoredRows}
-              theme={theme}
-            />
+            <StatCard label="Unique Styles" value={stats.uniqueStyles} theme={theme} />
+            <StatCard label="Ignored Rows" value={stats.ignoredRows} theme={theme} tone="warn" />
           </div>
         )}
 
-        {/* Inputs */}
-        <div
-          className={`border-b ${
-            isDark ? 'border-slate-700' : 'border-gray-300'
-          }`}
-        >
-          <div
-            className={`grid grid-cols-1 md:grid-cols-2 ${
-              isDark ? 'bg-slate-800/30' : 'bg-gray-100/50'
-            }`}
-          >
-            <InputHeader
-              title="📦 Style IDs"
-              subtitle="one per line"
-              isDark={isDark}
-              bordered
-            />
-            <InputHeader
-              title="🔗 Parent ASINs"
-              subtitle="one per line"
-              isDark={isDark}
-            />
+        {/* Line count badges + input headers */}
+        <div className={`border-b ${isDark ? 'border-slate-700' : 'border-gray-300'}`}>
+          <div className={`grid grid-cols-1 md:grid-cols-2 ${isDark ? 'bg-slate-800/30' : 'bg-gray-100/50'}`}>
+            <div className={`flex items-center justify-between p-3 text-sm font-semibold md:border-r ${isDark ? 'border-slate-700 text-emerald-400' : 'border-gray-300 text-emerald-700'}`}>
+              <span>📦 Style IDs <span className={`text-xs font-normal ${mutedText}`}>(one per line)</span></span>
+              {stylesLineCount > 0 && (
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                  {stylesLineCount} rows
+                </span>
+              )}
+            </div>
+            <div className={`flex items-center justify-between p-3 text-sm font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+              <span>🔗 Parent ASINs <span className={`text-xs font-normal ${mutedText}`}>(one per line)</span></span>
+              {asinsLineCount > 0 && (
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                  lineCountMismatch
+                    ? isDark ? 'bg-yellow-500/15 text-yellow-400' : 'bg-yellow-100 text-yellow-700'
+                    : isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                }`}>
+                  {asinsLineCount} rows
+                </span>
+              )}
+            </div>
           </div>
 
+          {/* Textareas with line gutters */}
           <div className="grid grid-cols-1 md:grid-cols-2">
-            <textarea
-              ref={stylesTextareaRef}
-              className={`h-64 w-full resize-none border-b p-4 font-mono text-sm focus:outline-none sm:h-72 md:h-[28rem] md:border-b-0 md:border-r ${
-                isDark
-                  ? 'border-slate-700 bg-transparent text-slate-200 placeholder-slate-600 focus:bg-slate-800/30'
-                  : 'border-gray-300 bg-transparent text-gray-900 placeholder-gray-400 focus:bg-gray-100/50'
-              }`}
-              placeholder={`Example:\nSTYLE-001\nSTYLE-002\nSTYLE-003`}
-              value={stylesInput}
-              onChange={(event) => setStylesInput(event.target.value)}
-              onScroll={(event) => {
-                if (asinsTextareaRef.current) {
-                  asinsTextareaRef.current.scrollTop =
-                    event.currentTarget.scrollTop;
-                }
-              }}
-              disabled={isChecking}
-              spellCheck={false}
-            />
-
-            <textarea
-              ref={asinsTextareaRef}
-              className={`h-64 w-full resize-none p-4 font-mono text-sm focus:outline-none sm:h-72 md:h-[28rem] ${
-                isDark
-                  ? 'bg-transparent text-slate-200 placeholder-slate-600 focus:bg-slate-800/30'
-                  : 'bg-transparent text-gray-900 placeholder-gray-400 focus:bg-gray-100/50'
-              }`}
-              placeholder={`Example:\nB08XYZ123AB\nB09ABC456CD\nB07DEF789EF`}
-              value={asinsInput}
-              onChange={(event) => setAsinsInput(event.target.value)}
-              onScroll={(event) => {
-                if (stylesTextareaRef.current) {
-                  stylesTextareaRef.current.scrollTop =
-                    event.currentTarget.scrollTop;
-                }
-              }}
-              disabled={isChecking}
-              spellCheck={false}
-            />
+            <div className={`flex border-b md:border-b-0 md:border-r ${isDark ? 'border-slate-700' : 'border-gray-300'}`}>
+              <LineGutter text={stylesInput} isDark={isDark} />
+              <textarea
+                ref={stylesRef}
+                className={`h-64 w-full resize-none p-4 font-mono text-sm focus:outline-none sm:h-72 md:h-[28rem] ${
+                  isDark ? 'bg-transparent text-slate-200 placeholder-slate-600 focus:bg-slate-800/20' : 'bg-transparent text-gray-900 placeholder-gray-400 focus:bg-gray-50/50'
+                }`}
+                placeholder={`Example:\nSTYLE-001\nSTYLE-002`}
+                value={stylesInput}
+                onChange={e => setStylesInput(e.target.value)}
+                onScroll={() => syncScroll('styles')}
+                disabled={isChecking}
+                spellCheck={false}
+              />
+            </div>
+            <div className="flex">
+              <LineGutter text={asinsInput} isDark={isDark} />
+              <textarea
+                ref={asinsRef}
+                className={`h-64 w-full resize-none p-4 font-mono text-sm focus:outline-none sm:h-72 md:h-[28rem] ${
+                  isDark ? 'bg-transparent text-slate-200 placeholder-slate-600 focus:bg-slate-800/20' : 'bg-transparent text-gray-900 placeholder-gray-400 focus:bg-gray-50/50'
+                }`}
+                placeholder={`Example:\nB08XYZ123AB\nB09ABC456CD`}
+                value={asinsInput}
+                onChange={e => setAsinsInput(e.target.value)}
+                onScroll={() => syncScroll('asins')}
+                disabled={isChecking}
+                spellCheck={false}
+              />
+            </div>
           </div>
         </div>
 
         {/* Results */}
         <div className="flex min-h-[300px] flex-1 flex-col">
-          <div
-            className={`flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
-              isDark
-                ? 'border-slate-700 bg-slate-800/30'
-                : 'border-gray-300 bg-gray-100/50'
-            }`}
-          >
+          <div className={`flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+            isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-300 bg-gray-100/50'
+          }`}>
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`text-sm font-semibold ${strongTextClass}`}>
-                Results
-              </span>
-
+              <span className={`text-sm font-semibold ${strongText}`}>Results</span>
               {conflicts.length > 0 && (
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs ${
-                    isDark
-                      ? 'bg-yellow-600/20 text-yellow-400'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}
-                >
-                  {conflicts.length} conflict
-                  {conflicts.length !== 1 ? 's' : ''} found
-                </span>
+                <>
+                  <span className={`rounded-full px-2 py-0.5 text-xs ${isDark ? 'bg-yellow-600/20 text-yellow-400' : 'bg-yellow-100 text-yellow-800'}`}>
+                    {conflicts.length} conflict{conflicts.length !== 1 ? 's' : ''}
+                  </span>
+                  <span className={`text-xs ${mutedText}`}>·</span>
+                  <span className={`text-xs ${mutedText}`}>sorted A–Z</span>
+                </>
               )}
             </div>
           </div>
 
           <div className="flex-1 overflow-auto">
             {conflicts.length === 0 && lastRan && (
-              <EmptyResult
-                icon={<CheckCircle className="h-8 w-8" />}
-                title="No conflicts found!"
-                description="All styles have unique parent ASINs."
-                theme={theme}
-                success
-              />
+              <EmptyResult icon={<CheckCircle className="h-8 w-8" />} title="No conflicts found!" description="All styles have unique parent ASINs." theme={theme} success />
             )}
-
             {conflicts.length === 0 && !lastRan && (
-              <EmptyResult
-                icon={<Upload className="h-8 w-8" />}
-                title="Ready to check for conflicts"
-                description='Paste your data above and click "Run Check".'
-                theme={theme}
-              />
+              <EmptyResult icon={<Upload className="h-8 w-8" />} title="Ready to check" description='Paste data above and click "Run Check" or press ⌘↵.' theme={theme} />
             )}
-
             {conflicts.length > 0 && (
               <div className="w-full overflow-x-auto">
                 <div className="min-w-[720px]">
-                  <div
-                    className={`sticky top-0 grid grid-cols-[18rem_1fr] border-b ${
-                      isDark
-                        ? 'border-slate-700 bg-slate-800'
-                        : 'border-gray-300 bg-gray-200'
-                    }`}
-                  >
-                    <div
-                      className={`border-r p-3 text-xs font-semibold ${
-                        isDark
-                          ? 'border-slate-700 text-slate-300'
-                          : 'border-gray-300 text-gray-700'
-                      }`}
-                    >
-                      Style ID
-                    </div>
-                    <div
-                      className={`p-3 text-xs font-semibold ${
-                        isDark ? 'text-slate-300' : 'text-gray-700'
-                      }`}
-                    >
-                      Unique Parent ASINs
-                    </div>
+                  {/* Table header */}
+                  <div className={`sticky top-0 grid grid-cols-[18rem_1fr_6rem] border-b ${isDark ? 'border-slate-700 bg-slate-800' : 'border-gray-300 bg-gray-200'}`}>
+                    <div className={`border-r p-3 text-xs font-semibold ${isDark ? 'border-slate-700 text-slate-300' : 'border-gray-300 text-gray-700'}`}>Style ID</div>
+                    <div className={`p-3 text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>Unique Parent ASINs</div>
+                    <div className={`p-3 text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>Severity</div>
                   </div>
 
-                  {conflicts.map((conflict) => (
-                    <div
-                      key={conflict.style}
-                      className={`grid grid-cols-[18rem_1fr] border-b transition-colors ${
-                        isDark
-                          ? 'border-slate-700/50 hover:bg-slate-800/30'
-                          : 'border-gray-200 hover:bg-gray-100/50'
-                      }`}
-                    >
+                  {conflicts.map(conflict => {
+                    const severity = getSeverity(conflict.asins.length);
+                    return (
                       <div
-                        className={`truncate border-r p-3 text-sm font-medium ${
-                          isDark
-                            ? 'border-slate-700/50 bg-yellow-600/5 text-slate-200'
-                            : 'border-gray-200 bg-yellow-100/30 text-gray-800'
+                        key={conflict.style}
+                        className={`grid grid-cols-[18rem_1fr_6rem] border-b transition-colors ${
+                          isDark ? 'border-slate-700/50 hover:bg-slate-800/30' : 'border-gray-200 hover:bg-gray-50/50'
                         }`}
-                        title={conflict.style}
                       >
-                        {conflict.style}
-                      </div>
-
-                      <div className="p-3">
-                        <div className="flex flex-wrap gap-2">
-                          {conflict.asins.map((asin) => (
-                            <span
-                              key={`${conflict.style}-${asin}`}
-                              className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-xs ${
-                                isDark
-                                  ? 'border-red-600/20 bg-red-600/10 text-red-400'
-                                  : 'border-red-300 bg-red-100 text-red-700'
-                              }`}
-                            >
-                              {asin}
-                            </span>
-                          ))}
+                        <div
+                          className={`truncate border-r p-3 text-sm font-medium ${isDark ? 'border-slate-700/50 bg-yellow-600/5 text-slate-200' : 'border-gray-200 bg-yellow-100/30 text-gray-800'}`}
+                          title={conflict.style}
+                        >
+                          {conflict.style}
+                        </div>
+                        <div className="p-3">
+                          <div className="flex flex-wrap gap-2">
+                            {conflict.asins.map(asin => (
+                              <span
+                                key={`${conflict.style}-${asin}`}
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-xs ${
+                                  isDark ? 'border-red-600/20 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'
+                                }`}
+                              >
+                                {asin}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="p-3">
+                          <span className={`inline-block rounded-md border px-2 py-0.5 text-[10px] font-bold ${severity.cls}`}>
+                            {severity.label}
+                          </span>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -817,115 +559,28 @@ export default function AsinConflictChecker({
   );
 }
 
-function StatCard({
-  label,
-  value,
-  theme,
-}: {
-  label: string;
-  value: number;
-  theme: 'light' | 'dark';
-}) {
+function StatCard({ label, value, theme, tone = 'default' }: { label: string; value: number; theme: 'light' | 'dark'; tone?: 'warn' | 'default' }) {
   const isDark = theme === 'dark';
-
   return (
-    <div
-      className={`rounded-lg border p-3 ${
-        isDark
-          ? 'border-slate-700/60 bg-slate-800/30'
-          : 'border-gray-200 bg-white/70'
-      }`}
-    >
-      <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-        {label}
-      </p>
-      <p
-        className={`mt-1 text-lg font-semibold ${
-          isDark ? 'text-white' : 'text-gray-900'
-        }`}
-      >
-        {value}
-      </p>
+    <div className={`rounded-lg border p-3 ${isDark ? 'border-slate-700/60 bg-slate-800/30' : 'border-gray-200 bg-white/70'}`}>
+      <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{label}</p>
+      <p className={`mt-1 text-lg font-semibold tabular-nums ${
+        tone === 'warn' && value > 0 ? 'text-yellow-400' : isDark ? 'text-white' : 'text-gray-900'
+      }`}>{value}</p>
     </div>
   );
 }
 
-function InputHeader({
-  title,
-  subtitle,
-  isDark,
-  bordered = false,
-}: {
-  title: string;
-  subtitle: string;
-  isDark: boolean;
-  bordered?: boolean;
-}) {
-  return (
-    <div
-      className={`flex flex-wrap items-center gap-2 p-3 text-sm font-semibold ${
-        bordered ? 'md:border-r' : ''
-      } ${
-        isDark
-          ? 'border-slate-700 text-emerald-400'
-          : 'border-gray-300 text-emerald-700'
-      }`}
-    >
-      <span>{title}</span>
-      <span
-        className={`text-xs font-normal ${
-          isDark ? 'text-slate-500' : 'text-gray-500'
-        }`}
-      >
-        ({subtitle})
-      </span>
-    </div>
-  );
-}
-
-function EmptyResult({
-  icon,
-  title,
-  description,
-  theme,
-  success = false,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  theme: 'light' | 'dark';
-  success?: boolean;
-}) {
+function EmptyResult({ icon, title, description, theme, success = false }: { icon: React.ReactNode; title: string; description: string; theme: 'light' | 'dark'; success?: boolean }) {
   const isDark = theme === 'dark';
-
   return (
     <div className="flex h-64 flex-col items-center justify-center px-4 text-center">
-      <div
-        className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
-          success
-            ? isDark
-              ? 'bg-emerald-600/10 text-emerald-400'
-              : 'bg-emerald-100 text-emerald-600'
-            : isDark
-              ? 'bg-slate-800/50 text-slate-500'
-              : 'bg-gray-200/50 text-gray-500'
-        }`}
-      >
-        {icon}
-      </div>
-
-      <p
-        className={`font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}
-      >
-        {title}
-      </p>
-      <p
-        className={`mt-1 max-w-md text-sm ${
-          isDark ? 'text-slate-500' : 'text-gray-500'
-        }`}
-      >
-        {description}
-      </p>
+      <div className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
+        success ? isDark ? 'bg-emerald-600/10 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
+        : isDark ? 'bg-slate-800/50 text-slate-500' : 'bg-gray-200/50 text-gray-500'
+      }`}>{icon}</div>
+      <p className={`font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>{title}</p>
+      <p className={`mt-1 max-w-md text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>{description}</p>
     </div>
   );
 }

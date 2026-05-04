@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Search,
   Shield,
+  Building2, // Added for Get Brand icon
 } from 'lucide-react';
 
 interface DocumentationProps {
@@ -30,7 +31,7 @@ const sections: DocSection[] = [
     icon: <BookOpen className="h-5 w-5" />,
     content: [
       'TARA is a listing operations tool suite.',
-      'It helps process SKUs, check ASIN conflicts, and generate Basecamp messages.',
+      'It helps process SKUs, check ASIN conflicts, generate Basecamp messages, and retrieve brand information.',
       'Use the sidebar to open each tool.',
       'Dashboard shows tool usage and recent activity counts.',
     ],
@@ -74,12 +75,26 @@ const sections: DocSection[] = [
     ],
   },
   {
+    id: 'brand',
+    title: 'Get Brand',
+    description: 'Retrieve brand names from SKU lists.',
+    icon: <Building2 className="h-5 w-5" />,
+    content: [
+      'Upload a CSV or text file containing SKUs (one per line or comma-separated).',
+      'Click "Get Brands" to process the SKUs.',
+      'The tool will match each SKU to its corresponding brand name from the catalog database.',
+      'Results can be downloaded as CSV with SKU and Brand Name columns.',
+      'Supports bulk processing of up to 10,000 SKUs per batch.',
+      'Coming soon: Integration with Amazon Brand Registry for real-time verification.',
+    ],
+  },
+  {
     id: 'downloads',
     title: 'Downloads',
     description: 'Access generated files.',
     icon: <FileText className="h-5 w-5" />,
     content: [
-      'Downloads shows generated export files.',
+      'Downloads shows generated export files from all tools including Shopkeep exports, ASIN conflict reports, Basecamp messages, and Brand lookup results.',
       'Use the download button to save the file again.',
       'Use delete only if the file is no longer needed.',
     ],
@@ -93,6 +108,7 @@ const sections: DocSection[] = [
       'Use only approved internal data.',
       'Do not share generated files with unauthorized users.',
       'Clear inputs when finished with sensitive data.',
+      'Brand information is retrieved from trusted internal catalog sources.',
       'Report unexpected errors to the administrator.',
     ],
   },
