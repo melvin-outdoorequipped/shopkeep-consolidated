@@ -43,6 +43,8 @@ interface ToolItem {
   id: ToolId;
   name: string;
   description: string;
+  icon: ReactNode;
+  accent: 'emerald' | 'cyan' | 'violet';
   comingSoon?: boolean;
 }
 
@@ -53,17 +55,22 @@ const toolsSubItems: ToolItem[] = [
     id: 'sku',
     name: 'Shopkeep Consolidated Tool',
     description: 'Process and consolidate SKU data.',
+    icon: <Settings className="h-4 w-4" />,
+    accent: 'cyan',
   },
   {
     id: 'asin',
     name: 'Multiple Parent ASIN Checker',
     description: 'Detect styles with multiple parent ASINs.',
+    icon: <Settings className="h-4 w-4" />,
+    accent: 'emerald',
   },
   {
     id: 'basecamp',
     name: 'Basecamp Response Generator',
-    description: 'Generate formatted Basecamp messages - Coming Soon!',
-    comingSoon: true,
+    description: 'Generate formatted Basecamp messages.',
+    icon: <MessageSquare className="h-4 w-4" />,
+    accent: 'violet',
   },
 ];
 
@@ -75,7 +82,8 @@ function applyTheme(theme: Theme) {
 
 export default function HomePage() {
   const [activeTool, setActiveTool] = useState<ToolId>('sku');
-  const [activeMainMenu, setActiveMainMenu] = useState<MainMenuId>('Dashboard');
+  const [activeMainMenu, setActiveMainMenu] =
+    useState<MainMenuId>('Dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>('dark');
@@ -136,16 +144,18 @@ export default function HomePage() {
 
   useEffect(() => {
     const handleNavigateToTool = (event: Event) => {
-      
       const customEvent = event as CustomEvent<{ toolId: ToolId }>;
       const toolId = customEvent.detail?.toolId;
-      
 
-      if (toolId !== 'sku' && toolId !== 'asin' && toolId !== 'basecamp') return;
-      
-      // Check if the tool is coming soon
-      const tool = toolsSubItems.find(t => t.id === toolId);
-      if (tool?.comingSoon) return; // Don't navigate if coming soon
+      if (toolId !== 'sku' && toolId !== 'asin' && toolId !== 'basecamp') {
+        return;
+      }
+
+      const selectedTool = toolsSubItems.find((tool) => tool.id === toolId);
+
+      if (selectedTool?.comingSoon) {
+        return;
+      }
 
       setActiveMainMenu('Tools');
       setActiveTool(toolId);
@@ -153,14 +163,33 @@ export default function HomePage() {
     };
 
     window.addEventListener('navigateToTool', handleNavigateToTool);
-    return () => window.removeEventListener('navigateToTool', handleNavigateToTool);
+
+    return () => {
+      window.removeEventListener('navigateToTool', handleNavigateToTool);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMobileSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+    };
   }, []);
 
   const toggleTheme = useCallback(() => {
     setTheme((currentTheme) => {
       const nextTheme: Theme = currentTheme === 'dark' ? 'light' : 'dark';
+
       localStorage.setItem(STORAGE_THEME_KEY, nextTheme);
       applyTheme(nextTheme);
+
       return nextTheme;
     });
   }, []);
@@ -171,11 +200,14 @@ export default function HomePage() {
   };
 
   const handleToolClick = (toolId: ToolId, comingSoon?: boolean) => {
-    if (comingSoon) return; // Don't navigate if coming soon
+    if (comingSoon) return;
+
     setActiveMainMenu('Tools');
     setActiveTool(toolId);
     setIsMobileSidebarOpen(false);
   };
+
+  const selectedTool = toolsSubItems.find((tool) => tool.id === activeTool);
 
   const pageMeta = useMemo(() => {
     if (activeMainMenu === 'Dashboard') {
@@ -187,13 +219,12 @@ export default function HomePage() {
     }
 
     if (activeMainMenu === 'Tools') {
-      const selectedTool = toolsSubItems.find((tool) => tool.id === activeTool);
+      const currentTool = toolsSubItems.find((tool) => tool.id === activeTool);
+
       return {
-        title: selectedTool?.comingSoon ? 'Basecamp Response Generator (Coming Soon)' : (selectedTool?.name ?? 'Tools'),
-        breadcrumb: `Tools / ${selectedTool?.comingSoon ? 'Basecamp Response Generator (Coming Soon)' : (selectedTool?.name ?? 'Selected Tool')}`,
-        description: selectedTool?.comingSoon 
-          ? 'This tool is currently in development and will be available soon.' 
-          : (selectedTool?.description ?? 'Run listing operations tools.'),
+        title: currentTool?.name ?? 'Tools',
+        breadcrumb: `Tools / ${currentTool?.name ?? 'Selected Tool'}`,
+        description: currentTool?.description ?? 'Run listing operations tools.',
       };
     }
 
@@ -209,69 +240,46 @@ export default function HomePage() {
       return {
         title: 'Documentation',
         breadcrumb: 'Resources / Documentation',
-        description: 'Guides, instructions, and tool usage notes.',
+        description: 'Simple guide for using TARA tools.',
       };
     }
 
     return {
       title: 'Terms & Conditions',
       breadcrumb: 'Resources / Terms & Conditions',
-      description: 'Usage policies and important information.',
+      description: 'Simple usage terms and reminders.',
     };
   }, [activeMainMenu, activeTool]);
 
   const renderContent = () => {
-    if (activeMainMenu === 'Dashboard') return <Dashboard theme={theme} />;
-    if (activeMainMenu === 'Downloads') return <DownloadPage theme={theme} />;
-    if (activeMainMenu === 'Documentation') return <Documentation theme={theme} />;
-    if (activeMainMenu === 'Terms') return <Terms theme={theme} />;
+    if (activeMainMenu === 'Dashboard') {
+      return <Dashboard theme={theme} />;
+    }
+
+    if (activeMainMenu === 'Downloads') {
+      return <DownloadPage theme={theme} />;
+    }
+
+    if (activeMainMenu === 'Documentation') {
+      return <Documentation theme={theme} />;
+    }
+
+    if (activeMainMenu === 'Terms') {
+      return <Terms theme={theme} />;
+    }
 
     if (activeMainMenu === 'Tools') {
-      // Check if the active tool is coming soon
-      const currentTool = toolsSubItems.find(t => t.id === activeTool);
-      if (currentTool?.comingSoon) {
-        return (
-          <div className={`flex h-full items-center justify-center rounded-2xl border-2 border-dashed p-12 text-center ${
-            isDark 
-              ? 'border-slate-700/50 bg-slate-900/40' 
-              : 'border-gray-300 bg-gray-50'
-          }`}>
-            <div className="max-w-md">
-              <div className="mb-4 flex justify-center">
-                <div className={`rounded-full p-4 ${
-                  isDark ? 'bg-yellow-500/20' : 'bg-yellow-100'
-                }`}>
-                  <MessageSquare className={`h-12 w-12 ${
-                    isDark ? 'text-yellow-400' : 'text-yellow-600'
-                  }`} />
-                </div>
-              </div>
-              <h2 className={`mb-2 text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                Coming Soon!
-              </h2>
-              <p className={`mb-4 ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
-                The Basecamp Response Generator is currently under development. 
-                We're working hard to bring you this feature soon.
-              </p>
-              <button
-                type="button"
-                onClick={() => setActiveMainMenu('Dashboard')}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                  isDark
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                    : 'bg-emerald-500 text-white hover:bg-emerald-600'
-                }`}
-              >
-                Return to Dashboard
-              </button>
-            </div>
-          </div>
-        );
+      if (activeTool === 'sku') {
+        return <SkuProcessor theme={theme} />;
       }
-      
-      if (activeTool === 'sku') return <SkuProcessor theme={theme} />;
-      if (activeTool === 'asin') return <AsinConflictChecker theme={theme} />;
-      if (activeTool === 'basecamp') return <BasecampGenerator theme={theme} />;
+
+      if (activeTool === 'asin') {
+        return <AsinConflictChecker theme={theme} />;
+      }
+
+      if (activeTool === 'basecamp') {
+        return <BasecampGenerator theme={theme} />;
+      }
     }
 
     return null;
@@ -279,52 +287,78 @@ export default function HomePage() {
 
   return (
     <div
-      className={`relative flex h-screen overflow-hidden transition-colors duration-300 ${
+      className={`relative flex h-screen overflow-hidden transition-colors duration-200 ${
         isDark ? 'bg-[#0F172A] text-slate-100' : 'bg-gray-100 text-gray-900'
       }`}
     >
-      {isMobileSidebarOpen && (
-        <button
-          type="button"
-          aria-label="Close sidebar overlay"
-          onClick={() => setIsMobileSidebarOpen(false)}
-          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden"
-        />
-      )}
+      {/* Mobile Overlay */}
+      <button
+        type="button"
+        aria-label="Close sidebar overlay"
+        onClick={() => setIsMobileSidebarOpen(false)}
+        className={`fixed inset-0 z-30 bg-black/40 transition-opacity duration-200 ease-out lg:hidden ${
+          isMobileSidebarOpen
+            ? 'pointer-events-auto opacity-100'
+            : 'pointer-events-none opacity-0'
+        }`}
+      />
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-full flex-col border-r shadow-2xl transition-all duration-300
+        className={`fixed left-0 top-0 z-40 flex h-full flex-col border-r shadow-2xl
+        transition-transform duration-200 ease-out
         ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0
+        lg:transition-[width] lg:duration-200 lg:ease-out
         ${isSidebarCollapsed ? 'lg:w-20' : 'lg:w-80'}
-        w-80
-        ${isDark ? 'border-slate-700/60 bg-[#172235]' : 'border-gray-200 bg-white'}`}
+        w-80 max-w-[85vw]
+        ${
+          isDark
+            ? 'border-slate-700/60 bg-[#172235]'
+            : 'border-gray-200 bg-white'
+        }`}
       >
         {/* Sidebar Header */}
-        <div className={`border-b p-5 ${isDark ? 'border-slate-700/60' : 'border-gray-200'}`}>
-          <div className="flex items-center justify-between">
+        <div
+          className={`border-b p-4 sm:p-5 ${
+            isDark ? 'border-slate-700/60' : 'border-gray-200'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
             <div
-              className={`overflow-hidden transition-all duration-300 ${
+              className={`min-w-0 overflow-hidden transition-[width,opacity] duration-200 ease-out ${
                 isSidebarCollapsed ? 'lg:w-0 lg:opacity-0' : 'w-auto opacity-100'
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500 shadow-lg">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500 shadow-lg">
                   <span className="text-lg font-bold text-white">T</span>
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold text-white">TARA</h1>
-                  <p className="text-xs text-slate-400">Listing Operations Tools</p>
+
+                <div className="min-w-0">
+                  <h1
+                    className={`truncate text-xl font-bold ${
+                      isDark ? 'text-white' : 'text-gray-900'
+                    }`}
+                  >
+                    TARA
+                  </h1>
+                  <p
+                    className={`truncate text-xs ${
+                      isDark ? 'text-slate-400' : 'text-gray-500'
+                    }`}
+                  >
+                    Listing Operations Tools
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex flex-shrink-0 items-center gap-1">
               <button
                 type="button"
                 onClick={() => setIsSidebarCollapsed((current) => !current)}
-                className={`hidden rounded-lg p-2 transition-colors lg:block ${
+                className={`hidden rounded-lg p-2 transition-colors duration-150 lg:block ${
                   isDark
                     ? 'text-slate-400 hover:bg-slate-800 hover:text-white'
                     : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
@@ -341,7 +375,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(false)}
-                className={`rounded-lg p-2 transition-colors lg:hidden ${
+                className={`rounded-lg p-2 transition-colors duration-150 lg:hidden ${
                   isDark
                     ? 'text-slate-400 hover:bg-slate-800 hover:text-white'
                     : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
@@ -372,47 +406,39 @@ export default function HomePage() {
             ))}
           </div>
 
+          {/* Expanded Tool List */}
           {activeMainMenu === 'Tools' && !isSidebarCollapsed && (
-            <div className="mt-5 space-y-2 px-2">
+            <div className="mt-5 space-y-2 px-1 sm:px-2">
               {toolsSubItems.map((tool) => (
-                <button
+                <ToolSidebarButton
                   key={tool.id}
-                  type="button"
+                  tool={tool}
+                  active={activeTool === tool.id}
+                  theme={theme}
                   onClick={() => handleToolClick(tool.id, tool.comingSoon)}
-                  disabled={tool.comingSoon}
-                  className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
-                    tool.comingSoon
-                      ? 'cursor-not-allowed opacity-60'
-                      : activeTool === tool.id
-                        ? tool.id === 'basecamp'
-                          ? 'border-violet-500/40 bg-violet-500/10 text-violet-300'
-                          : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                        : isDark
-                          ? 'border-slate-700/40 text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                          : 'border-gray-200 text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold">
-                      {tool.id === 'basecamp' && (
-                        <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" />
-                      )}
-                      {tool.name}
-                      {tool.comingSoon && (
-                        <span className="ml-2 inline-flex items-center rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-medium text-yellow-400">
-                          Soon
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">{tool.description}</div>
-                </button>
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Collapsed Tool Icons */}
+          {activeMainMenu === 'Tools' && isSidebarCollapsed && (
+            <div className="mt-5 hidden space-y-2 lg:block">
+              {toolsSubItems.map((tool) => (
+                <CollapsedToolButton
+                  key={tool.id}
+                  tool={tool}
+                  active={activeTool === tool.id}
+                  theme={theme}
+                  onClick={() => handleToolClick(tool.id, tool.comingSoon)}
+                />
               ))}
             </div>
           )}
 
           <div className="mt-7">
             <SectionLabel collapsed={isSidebarCollapsed} label="RESOURCES" />
+
             <div className="space-y-2">
               {resourceMenuItems.map((item) => (
                 <SidebarButton
@@ -430,41 +456,47 @@ export default function HomePage() {
         </nav>
 
         {/* Sidebar Footer */}
-        <div className={`border-t p-4 ${isDark ? 'border-slate-700/60' : 'border-gray-200'}`}>
+        <div
+          className={`border-t p-4 ${
+            isDark ? 'border-slate-700/60' : 'border-gray-200'
+          }`}
+        >
           {!isSidebarCollapsed ? (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 transition-colors duration-150 hover:border-emerald-500/50 hover:bg-emerald-500/15">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                <span className="text-sm font-semibold text-emerald-400">Tools ready</span>
+                <span className="text-sm font-semibold text-emerald-400">
+                  Tools ready
+                </span>
               </div>
               <p className="mt-1 text-xs text-slate-400">Beta v1.0</p>
             </div>
           ) : (
-            <div className="mx-auto h-2 w-2 rounded-full bg-emerald-400" />
+            <div className="mx-auto h-2.5 w-2.5 rounded-full bg-emerald-400" />
           )}
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main Content Wrapper */}
       <div
-        className={`flex h-full flex-1 flex-col transition-all duration-300 ${
+        className={`ml-0 flex h-full min-w-0 flex-1 flex-col transition-[margin] duration-200 ease-out ${
           isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-80'
-        } ml-0`}
+        }`}
       >
-        {/* Header */}
+        {/* Top Header */}
         <header
-          className={`border-b px-4 py-4 shadow-xl backdrop-blur-sm sm:px-6 lg:px-8 ${
+          className={`sticky top-0 z-20 border-b px-4 py-3 shadow-lg backdrop-blur-md sm:px-6 lg:px-8 ${
             isDark
-              ? 'border-slate-700/50 bg-[#172235]/80'
-              : 'border-gray-200 bg-white/80'
+              ? 'border-slate-700/50 bg-[#172235]/85'
+              : 'border-gray-200 bg-white/85'
           }`}
         >
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(true)}
-                className={`rounded-lg p-2 transition-colors lg:hidden ${
+                className={`flex-shrink-0 rounded-lg p-2 transition-colors duration-150 lg:hidden ${
                   isDark
                     ? 'text-slate-400 hover:bg-slate-800 hover:text-white'
                     : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
@@ -475,31 +507,59 @@ export default function HomePage() {
               </button>
 
               <div className="min-w-0">
-                <p className="truncate text-xs text-slate-400">{pageMeta.breadcrumb}</p>
-                <h2 className={`truncate text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                <p className="truncate text-xs text-slate-400">
+                  {pageMeta.breadcrumb}
+                </p>
+
+                <h2
+                  className={`truncate text-lg font-semibold sm:text-xl ${
+                    isDark ? 'text-white' : 'text-gray-900'
+                  }`}
+                >
                   {pageMeta.title}
                 </h2>
-                <p className="hidden text-sm text-slate-500 sm:block">{pageMeta.description}</p>
+
+                <p className="hidden truncate text-sm text-slate-500 sm:block">
+                  {pageMeta.description}
+                </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                isDark
-                  ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {isDark ? 'Light' : 'Dark'}
-            </button>
+            <div className="flex flex-shrink-0 items-center gap-2">
+              {activeMainMenu === 'Tools' && selectedTool && (
+                <span
+                  className={`hidden rounded-full border px-3 py-1 text-xs font-semibold md:inline-flex ${
+                    selectedTool.accent === 'violet'
+                      ? 'border-violet-500/30 bg-violet-500/10 text-violet-300'
+                      : selectedTool.accent === 'cyan'
+                        ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+                        : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                  }`}
+                >
+                  {selectedTool.name}
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors duration-150 ${
+                  isDark
+                    ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {isDark ? 'Light' : 'Dark'}
+              </button>
+            </div>
           </div>
         </header>
 
-        {/* Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-4 sm:p-6 lg:p-8">{renderContent()}</div>
+        {/* Page Content */}
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="w-full max-w-full p-4 sm:p-6 lg:p-8">
+            {renderContent()}
+          </div>
         </main>
       </div>
 
@@ -511,6 +571,7 @@ export default function HomePage() {
           --text-secondary: #6b7280;
           --border-color: #e5e7eb;
         }
+
         .dark-mode {
           --bg-primary: #0f172a;
           --bg-secondary: #172235;
@@ -518,14 +579,39 @@ export default function HomePage() {
           --text-secondary: #94a3b8;
           --border-color: #334155;
         }
-        html { scroll-behavior: smooth; }
-        ::selection { background: rgba(16, 185, 129, 0.3); }
+
+        html {
+          scroll-behavior: smooth;
+        }
+
+        ::selection {
+          background: rgba(16, 185, 129, 0.3);
+        }
+
+        * {
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
       `}</style>
     </div>
   );
 }
 
-function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
+function SectionLabel({
+  label,
+  collapsed,
+}: {
+  label: string;
+  collapsed: boolean;
+}) {
   return (
     <div className="mb-3 px-3 text-xs font-bold uppercase tracking-wider text-slate-500">
       {collapsed ? (
@@ -560,7 +646,7 @@ function SidebarButton({
       onClick={onClick}
       title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
-      className={`group relative flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-sm transition-all ${
+      className={`group relative flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-sm transition-colors duration-150 ${
         active
           ? 'border-emerald-500/50 bg-emerald-500/10 text-white shadow-lg shadow-emerald-500/5'
           : isDark
@@ -568,11 +654,21 @@ function SidebarButton({
             : 'border-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900'
       }`}
     >
-      <span className={`transition-colors ${active ? 'text-emerald-400' : 'group-hover:text-emerald-400'}`}>
+      <span
+        className={`flex-shrink-0 transition-colors ${
+          active ? 'text-emerald-400' : 'group-hover:text-emerald-400'
+        }`}
+      >
         {icon}
       </span>
 
-      <span className={`${collapsed ? 'hidden' : 'block'} font-medium`}>{label}</span>
+      <span
+        className={`${
+          collapsed ? 'hidden' : 'block'
+        } min-w-0 truncate font-medium`}
+      >
+        {label}
+      </span>
 
       {active && !collapsed && (
         <span className="ml-auto h-7 w-1 rounded-full bg-emerald-400" />
@@ -583,6 +679,105 @@ function SidebarButton({
           {label}
         </span>
       )}
+    </button>
+  );
+}
+
+function ToolSidebarButton({
+  tool,
+  active,
+  theme,
+  onClick,
+}: {
+  tool: ToolItem;
+  active: boolean;
+  theme: Theme;
+  onClick: () => void;
+}) {
+  const isDark = theme === 'dark';
+
+  const activeClass =
+    tool.accent === 'violet'
+      ? 'border-violet-500/40 bg-violet-500/10 text-violet-300'
+      : tool.accent === 'cyan'
+        ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
+        : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={tool.comingSoon}
+      className={`group w-full rounded-xl border px-3 py-3 text-left transition-colors duration-150 ${
+        tool.comingSoon
+          ? 'cursor-not-allowed opacity-60'
+          : active
+            ? activeClass
+            : isDark
+              ? 'border-slate-700/40 text-slate-400 hover:bg-slate-800/60 hover:text-white'
+              : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+      }`}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex-shrink-0">{tool.icon}</span>
+
+        <span className="min-w-0 truncate text-sm font-semibold">
+          {tool.name}
+        </span>
+
+        {tool.comingSoon && (
+          <span className="ml-auto rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] font-semibold text-yellow-400">
+            Soon
+          </span>
+        )}
+      </div>
+
+      <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+        {tool.description}
+      </p>
+    </button>
+  );
+}
+
+function CollapsedToolButton({
+  tool,
+  active,
+  theme,
+  onClick,
+}: {
+  tool: ToolItem;
+  active: boolean;
+  theme: Theme;
+  onClick: () => void;
+}) {
+  const isDark = theme === 'dark';
+
+  const activeColor =
+    tool.accent === 'violet'
+      ? 'border-violet-500/50 bg-violet-500/10 text-violet-300'
+      : tool.accent === 'cyan'
+        ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-300'
+        : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={tool.comingSoon}
+      title={tool.name}
+      className={`group relative mx-auto flex h-11 w-11 items-center justify-center rounded-xl border transition-colors duration-150 ${
+        active
+          ? activeColor
+          : isDark
+            ? 'border-transparent text-slate-400 hover:bg-slate-800/60 hover:text-white'
+            : 'border-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+      }`}
+    >
+      {tool.icon}
+
+      <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+        {tool.name}
+      </span>
     </button>
   );
 }

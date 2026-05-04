@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 
-type ToolType = 'sku' | 'asin';
+type ToolType = 'sku' | 'asin' | 'basecamp';
 type RunStatus = 'completed' | 'failed' | 'warning';
 
 interface LogToolRunInput {

@@ -313,6 +313,8 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         setSkus('');
       }
     } catch (error) {
+      console.error('SKU PROCESS ERROR:', error);
+
       const message =
         error instanceof Error ? error.message : 'Unknown processing error.';
 
@@ -451,7 +453,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
     : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400';
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-full space-y-6 overflow-hidden">
       {feedback && (
         <div
           className={`rounded-lg border px-4 py-3 text-sm ${
@@ -472,21 +474,24 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         </div>
       )}
 
-      <div className={`rounded-xl border p-5 shadow-lg ${pageBg}`}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex-1">
-            <div className="mb-3 flex items-center gap-2">
-              <UploadCloud className="h-5 w-5 text-emerald-500" />
-              <div>
+      {/* Input Panel */}
+      <div className={`rounded-xl border p-4 shadow-lg sm:p-5 ${pageBg}`}>
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="mb-3 flex items-start gap-2">
+              <UploadCloud className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
+
+              <div className="min-w-0">
                 <h2
-                  className={`text-sm font-semibold uppercase tracking-wider ${
+                  className={`break-words text-sm font-semibold uppercase tracking-wider ${
                     isDark ? 'text-slate-200' : 'text-gray-900'
                   }`}
                 >
                   Shopkeep Consolidated Tool
                 </h2>
+
                 <p
-                  className={`text-xs ${
+                  className={`mt-1 text-xs leading-5 ${
                     isDark ? 'text-slate-400' : 'text-gray-500'
                   }`}
                 >
@@ -497,7 +502,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
             </div>
 
             <textarea
-              className={`h-32 w-full resize-none rounded-lg border p-3 font-mono text-xs focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-60 ${inputClass}`}
+              className={`h-40 w-full resize-none rounded-lg border p-3 font-mono text-xs focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-36 lg:h-32 ${inputClass}`}
               placeholder={`Enter SKUs one per line:\nSKU12345\nSKU67890\nSKU11111`}
               value={skus}
               onChange={(event) => setSkus(event.target.value)}
@@ -506,7 +511,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
             />
           </div>
 
-          <div className="w-full lg:w-72">
+          <div className="w-full xl:w-80">
             <div className="mb-3 grid grid-cols-3 gap-2">
               <MiniStat label="Rows" value={parsed.rawSkus.length} theme={theme} />
               <MiniStat
@@ -521,12 +526,12 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
               />
             </div>
 
-            <div className="flex gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto] xl:grid-cols-1 2xl:grid-cols-[1fr_auto_auto]">
               <button
                 type="button"
                 onClick={handleProcess}
                 disabled={!hasValidSkus || isProcessing}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isProcessing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -540,7 +545,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
                 type="button"
                 onClick={loadSample}
                 disabled={isProcessing}
-                className={`rounded-lg px-3 py-2.5 text-sm transition-colors disabled:opacity-50 ${
+                className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2.5 text-sm transition-colors disabled:opacity-50 sm:w-auto xl:w-full 2xl:w-auto ${
                   isDark
                     ? 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -553,7 +558,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
                 type="button"
                 onClick={clearInput}
                 disabled={isProcessing || !hasValidSkus}
-                className={`rounded-lg px-3 py-2.5 transition-colors disabled:opacity-50 ${
+                className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2.5 transition-colors disabled:opacity-50 sm:w-auto xl:w-full 2xl:w-auto ${
                   isDark
                     ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30'
                     : 'bg-red-100 text-red-700 hover:bg-red-200'
@@ -566,7 +571,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
 
             {parsed.duplicateCount > 0 && (
               <div
-                className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
+                className={`mt-3 rounded-lg border px-3 py-2 text-xs leading-5 ${
                   isDark
                     ? 'border-yellow-500/30 bg-yellow-600/10 text-yellow-400'
                     : 'border-yellow-300 bg-yellow-100 text-yellow-800'
@@ -579,13 +584,14 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         </div>
       </div>
 
+      {/* Batch History */}
       <div className={`overflow-hidden rounded-xl border shadow-lg ${pageBg}`}>
         <div
           className={`flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
             isDark ? 'border-slate-700/50' : 'border-gray-200'
           }`}
         >
-          <div>
+          <div className="min-w-0">
             <h3
               className={`text-sm font-semibold ${
                 isDark ? 'text-slate-100' : 'text-gray-900'
@@ -593,8 +599,9 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
             >
               Batch Import History
             </h3>
+
             <p
-              className={`text-xs ${
+              className={`mt-1 text-xs leading-5 ${
                 isDark ? 'text-slate-400' : 'text-gray-500'
               }`}
             >
@@ -606,7 +613,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
             type="button"
             onClick={fetchBatches}
             disabled={isLoadingBatches}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 sm:w-auto ${
               isDark
                 ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800'
                 : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
@@ -621,86 +628,100 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           </button>
         </div>
 
-        <div className="overflow-auto">
-          <table className="w-full min-w-[1350px] border-collapse text-sm">
-            <thead>
-              <tr
-                className={
-                  isDark
-                    ? 'bg-cyan-950/70 text-slate-100'
-                    : 'bg-cyan-900 text-white'
-                }
-              >
-                <th className="w-10 px-3 py-3 text-left">
-                  <input type="checkbox" className="h-4 w-4 rounded" />
-                </th>
-                <TableHead>Date Imported</TableHead>
-                <TableHead>Date Updated</TableHead>
-                <TableHead>Import By</TableHead>
-                <TableHead>Batch ID</TableHead>
-                <TableHead>Import Name & Tool</TableHead>
-                <TableHead>Total Items</TableHead>
-                <TableHead>Progress</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead alignRight>Actions</TableHead>
-              </tr>
-            </thead>
+        {isLoadingBatches ? (
+          <div className="px-6 py-16 text-center">
+            <Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-500" />
+            <p
+              className={`mt-2 text-sm ${
+                isDark ? 'text-slate-400' : 'text-gray-500'
+              }`}
+            >
+              Loading batches...
+            </p>
+          </div>
+        ) : batches.length === 0 ? (
+          <div className="px-6 py-16 text-center">
+            <UploadCloud
+              className={`mx-auto h-10 w-10 ${
+                isDark ? 'text-slate-500' : 'text-gray-400'
+              }`}
+            />
+            <p
+              className={`mt-2 text-sm font-medium ${
+                isDark ? 'text-slate-300' : 'text-gray-700'
+              }`}
+            >
+              No batch records yet
+            </p>
+            <p
+              className={`mt-1 text-xs ${
+                isDark ? 'text-slate-500' : 'text-gray-500'
+              }`}
+            >
+              Process SKUs to create your first import record.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Mobile / Tablet Cards */}
+            <div className="grid grid-cols-1 gap-3 p-3 lg:hidden">
+              {batches.map((batch) => (
+                <MobileBatchCard
+                  key={batch.id}
+                  batch={batch}
+                  theme={theme}
+                  onView={() => setSelectedBatch(batch)}
+                  onDelete={() => handleDeleteBatch(batch)}
+                  onDownload={() => handleDownloadSummary(batch)}
+                  onRefresh={fetchBatches}
+                />
+              ))}
+            </div>
 
-            <tbody>
-              {isLoadingBatches ? (
-                <tr>
-                  <td colSpan={10} className="px-6 py-16 text-center">
-                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-500" />
-                    <p
-                      className={`mt-2 text-sm ${
-                        isDark ? 'text-slate-400' : 'text-gray-500'
-                      }`}
-                    >
-                      Loading batches...
-                    </p>
-                  </td>
-                </tr>
-              ) : batches.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="px-6 py-16 text-center">
-                    <UploadCloud
-                      className={`mx-auto h-10 w-10 ${
-                        isDark ? 'text-slate-500' : 'text-gray-400'
-                      }`}
+            {/* Desktop Table */}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[1180px] border-collapse text-sm">
+                <thead>
+                  <tr
+                    className={
+                      isDark
+                        ? 'bg-cyan-950/70 text-slate-100'
+                        : 'bg-cyan-900 text-white'
+                    }
+                  >
+                    <th className="w-10 px-3 py-3 text-left">
+                      <input type="checkbox" className="h-4 w-4 rounded" />
+                    </th>
+                    <TableHead>Date Imported</TableHead>
+                    <TableHead>Date Updated</TableHead>
+                    <TableHead>Import By</TableHead>
+                    <TableHead>Batch ID</TableHead>
+                    <TableHead>Import Name & Tool</TableHead>
+                    <TableHead>Total Items</TableHead>
+                    <TableHead>Progress</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead alignRight>Actions</TableHead>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {batches.map((batch, index) => (
+                    <BatchTableRow
+                      key={batch.id}
+                      batch={batch}
+                      index={index}
+                      theme={theme}
+                      onView={() => setSelectedBatch(batch)}
+                      onDelete={() => handleDeleteBatch(batch)}
+                      onDownload={() => handleDownloadSummary(batch)}
+                      onRefresh={fetchBatches}
                     />
-                    <p
-                      className={`mt-2 text-sm font-medium ${
-                        isDark ? 'text-slate-300' : 'text-gray-700'
-                      }`}
-                    >
-                      No batch records yet
-                    </p>
-                    <p
-                      className={`mt-1 text-xs ${
-                        isDark ? 'text-slate-500' : 'text-gray-500'
-                      }`}
-                    >
-                      Process SKUs to create your first import record.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                batches.map((batch, index) => (
-                  <BatchTableRow
-                    key={batch.id}
-                    batch={batch}
-                    index={index}
-                    theme={theme}
-                    onView={() => setSelectedBatch(batch)}
-                    onDelete={() => handleDeleteBatch(batch)}
-                    onDownload={() => handleDownloadSummary(batch)}
-                    onRefresh={fetchBatches}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {selectedBatch && (
@@ -710,6 +731,164 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           onClose={() => setSelectedBatch(null)}
         />
       )}
+    </div>
+  );
+}
+
+function MobileBatchCard({
+  batch,
+  theme,
+  onView,
+  onDelete,
+  onDownload,
+  onRefresh,
+}: {
+  batch: SkuBatchRow;
+  theme: 'light' | 'dark';
+  onView: () => void;
+  onDelete: () => void;
+  onDownload: () => void;
+  onRefresh: () => void;
+}) {
+  const isDark = theme === 'dark';
+  const progress = getProgress(batch);
+  const brands = batch.brands_found ?? [];
+
+  return (
+    <div
+      className={`rounded-xl border p-4 ${
+        isDark
+          ? 'border-slate-700/60 bg-slate-950/60'
+          : 'border-gray-200 bg-white'
+      }`}
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-mono text-xs font-semibold text-cyan-400">
+            {batch.batch_id}
+          </p>
+
+          <h4
+            className={`mt-1 truncate text-sm font-semibold ${
+              isDark ? 'text-slate-100' : 'text-gray-900'
+            }`}
+            title={batch.filename || 'shopkeep-consolidated-tool'}
+          >
+            {batch.filename || 'shopkeep-consolidated-tool'}
+          </h4>
+
+          <p
+            className={`mt-1 text-xs ${
+              isDark ? 'text-slate-500' : 'text-gray-500'
+            }`}
+          >
+            {formatDateTime(batch.created_at)}
+          </p>
+        </div>
+
+        <StatusBadge status={batch.status} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <MiniStat label="Items" value={batch.sku_count} theme={theme} />
+        <MiniStat label="Unique" value={batch.unique_sku_count} theme={theme} />
+        <MiniStat label="Matched" value={batch.matched_count} theme={theme} />
+      </div>
+
+      <div className="mt-3">
+        <div className="mb-1 flex items-center justify-between text-[11px]">
+          <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
+            Progress
+          </span>
+          <span className={isDark ? 'text-slate-300' : 'text-gray-700'}>
+            {progress}%
+          </span>
+        </div>
+
+        <div
+          className={`h-2 overflow-hidden rounded-full ${
+            isDark ? 'bg-slate-800' : 'bg-gray-100'
+          }`}
+        >
+          <div
+            className={`h-full rounded-full ${getProgressColor(batch.status)}`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <p
+          className={`mb-1 text-[11px] ${
+            isDark ? 'text-slate-500' : 'text-gray-500'
+          }`}
+        >
+          Brands / Tool
+        </p>
+
+        <div className="flex flex-wrap gap-1 text-xs text-cyan-400">
+          {brands.length > 0 ? (
+            brands.slice(0, 3).map((brand) => (
+              <span key={brand} className="inline-flex items-center gap-1">
+                <Tag className="h-3 w-3" />
+                {brand}
+              </span>
+            ))
+          ) : (
+            <span>listing-loader-v2</span>
+          )}
+        </div>
+      </div>
+
+      {batch.error && (
+        <div
+          className={`mt-3 rounded-lg border p-2 text-xs ${
+            isDark
+              ? 'border-red-500/30 bg-red-500/10 text-red-400'
+              : 'border-red-300 bg-red-50 text-red-700'
+          }`}
+        >
+          {batch.error}
+        </div>
+      )}
+
+      <div className="mt-4 grid grid-cols-4 gap-2">
+        <button
+          type="button"
+          onClick={onDownload}
+          className="inline-flex items-center justify-center rounded-lg bg-cyan-700/70 p-2 text-white hover:bg-cyan-600"
+          title="Download summary"
+        >
+          <Download className="h-4 w-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={onView}
+          className="inline-flex items-center justify-center rounded-lg bg-cyan-700/70 p-2 text-white hover:bg-cyan-600"
+          title="View details"
+        >
+          <Eye className="h-4 w-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="inline-flex items-center justify-center rounded-lg bg-cyan-700/70 p-2 text-white hover:bg-cyan-600"
+          title="Refresh"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={onDelete}
+          className="inline-flex items-center justify-center rounded-lg bg-red-600/60 p-2 text-white hover:bg-red-600"
+          title="Delete"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -751,16 +930,28 @@ function BatchTableRow({
         <input type="checkbox" className="h-4 w-4 rounded" />
       </td>
 
-      <td className={`px-4 py-3 text-xs ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
+      <td
+        className={`whitespace-nowrap px-4 py-3 text-xs ${
+          isDark ? 'text-slate-200' : 'text-gray-700'
+        }`}
+      >
         {formatDateTime(batch.created_at)}
       </td>
 
-      <td className={`px-4 py-3 text-xs ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
+      <td
+        className={`whitespace-nowrap px-4 py-3 text-xs ${
+          isDark ? 'text-slate-200' : 'text-gray-700'
+        }`}
+      >
         {formatDateTime(batch.created_at)}
       </td>
 
-      <td className={`px-4 py-3 text-xs ${isDark ? 'text-slate-100' : 'text-gray-800'}`}>
-        <div className="flex items-center gap-2">
+      <td
+        className={`px-4 py-3 text-xs ${
+          isDark ? 'text-slate-100' : 'text-gray-800'
+        }`}
+      >
+        <div className="flex items-center gap-2 whitespace-nowrap">
           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-700/50 text-[10px] text-white">
             T
           </div>
@@ -768,16 +959,25 @@ function BatchTableRow({
         </div>
       </td>
 
-      <td className={`px-4 py-3 font-mono text-xs ${isDark ? 'text-slate-100' : 'text-gray-800'}`}>
+      <td
+        className={`whitespace-nowrap px-4 py-3 font-mono text-xs ${
+          isDark ? 'text-slate-100' : 'text-gray-800'
+        }`}
+      >
         {batch.batch_id}
       </td>
 
       <td className="px-4 py-3 text-xs">
-        <div className={isDark ? 'text-slate-100' : 'text-gray-800'}>
+        <div
+          className={`max-w-[260px] truncate ${
+            isDark ? 'text-slate-100' : 'text-gray-800'
+          }`}
+          title={batch.filename || 'shopkeep-consolidated-tool'}
+        >
           {batch.filename || 'shopkeep-consolidated-tool'}
         </div>
 
-        <div className="mt-0.5 flex flex-wrap gap-1 text-cyan-400">
+        <div className="mt-0.5 flex max-w-[260px] flex-wrap gap-1 text-cyan-400">
           {brands.length > 0 ? (
             brands.slice(0, 2).map((brand) => (
               <span key={brand} className="inline-flex items-center gap-1">
@@ -798,7 +998,7 @@ function BatchTableRow({
       </td>
 
       <td className="px-4 py-3">
-        <div className="w-36">
+        <div className="w-32 sm:w-36">
           <div className="h-1.5 overflow-hidden rounded-full bg-slate-700/70">
             <div
               className={`h-full rounded-full ${getProgressColor(batch.status)}`}
@@ -806,7 +1006,7 @@ function BatchTableRow({
             />
           </div>
 
-          <p className="mt-1 text-[10px] text-slate-300">
+          <p className="mt-1 whitespace-nowrap text-[10px] text-slate-300">
             {progress}% of {batch.sku_count} items
           </p>
         </div>
@@ -824,18 +1024,21 @@ function BatchTableRow({
             color="cyan"
             onClick={onDownload}
           />
+
           <ActionButton
             label="View details"
             icon={<Eye className="h-3.5 w-3.5" />}
             color="cyan"
             onClick={onView}
           />
+
           <ActionButton
             label="Refresh"
             icon={<RefreshCw className="h-3.5 w-3.5" />}
             color="cyan"
             onClick={onRefresh}
           />
+
           <ActionButton
             label="Delete"
             icon={<Trash2 className="h-3.5 w-3.5" />}
@@ -857,7 +1060,7 @@ function TableHead({
 }) {
   return (
     <th
-      className={`px-4 py-3 text-xs font-semibold ${
+      className={`whitespace-nowrap px-4 py-3 text-xs font-semibold ${
         alignRight ? 'text-right' : 'text-left'
       }`}
     >
@@ -878,7 +1081,7 @@ function StatusBadge({ status }: { status: BatchStatus }) {
 
   return (
     <span
-      className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${statusClass}`}
+      className={`inline-flex whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-semibold ${statusClass}`}
     >
       {getStatusLabel(status)}
     </span>
@@ -926,16 +1129,24 @@ function MiniStat({
 
   return (
     <div
-      className={`rounded-lg border p-2 ${
+      className={`min-w-0 rounded-lg border p-2 ${
         isDark
           ? 'border-slate-700/50 bg-slate-800/40'
           : 'border-gray-200 bg-gray-50'
       }`}
     >
-      <p className={`text-[10px] uppercase ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+      <p
+        className={`truncate text-[10px] uppercase ${
+          isDark ? 'text-slate-500' : 'text-gray-500'
+        }`}
+      >
         {label}
       </p>
-      <p className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
+      <p
+        className={`truncate text-sm font-semibold ${
+          isDark ? 'text-slate-100' : 'text-gray-900'
+        }`}
+      >
         {value}
       </p>
     </div>
@@ -954,18 +1165,18 @@ function BatchDetailsModal({
   const isDark = theme === 'dark';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4">
       <div
-        className={`w-full max-w-xl rounded-xl border p-6 shadow-2xl ${
+        className={`max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border p-4 shadow-2xl sm:p-6 ${
           isDark
             ? 'border-slate-700 bg-slate-950 text-slate-100'
             : 'border-gray-200 bg-white text-gray-900'
         }`}
       >
-        <div className="mb-4 flex items-start justify-between">
-          <div>
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="min-w-0">
             <h3 className="text-lg font-semibold">Batch Details</h3>
-            <p className="font-mono text-xs text-emerald-500">
+            <p className="break-all font-mono text-xs text-emerald-500">
               {batch.batch_id}
             </p>
           </div>
@@ -1011,7 +1222,7 @@ function BatchDetailsModal({
         )}
 
         {batch.export_path && (
-          <div className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs text-cyan-300">
+          <div className="mt-4 break-all rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs text-cyan-300">
             Export path: {batch.export_path}
           </div>
         )}
@@ -1019,8 +1230,8 @@ function BatchDetailsModal({
         {batch.error && (
           <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
             <div className="flex items-start gap-2">
-              <AlertCircle className="mt-0.5 h-4 w-4" />
-              <span>{batch.error}</span>
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span className="break-words">{batch.error}</span>
             </div>
           </div>
         )}
@@ -1031,7 +1242,7 @@ function BatchDetailsModal({
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3">
+    <div className="min-w-0 rounded-lg border border-slate-700/40 bg-slate-900/40 p-3">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="mt-1 break-all text-sm">{value}</p>
     </div>

@@ -97,9 +97,9 @@ function buildPairs(stylesInput: string, asinsInput: string) {
   const pairs: StyleAsinPair[] = [];
   let ignoredRows = 0;
 
-  for (let i = 0; i < maxRows; i += 1) {
-    const style = stylesArray[i]?.trim() ?? '';
-    const asin = asinsArray[i]?.trim() ?? '';
+  for (let index = 0; index < maxRows; index += 1) {
+    const style = stylesArray[index]?.trim() ?? '';
+    const asin = asinsArray[index]?.trim() ?? '';
 
     if (style && asin) {
       pairs.push({ style, asin });
@@ -132,7 +132,7 @@ function findConflicts(pairs: StyleAsinPair[]): Conflict[] {
       style,
       asins: Array.from(asinsSet).sort(),
     }))
-    .sort((a, b) => a.style.localeCompare(b.style));
+    .sort((first, second) => first.style.localeCompare(second.style));
 }
 
 export default function AsinConflictChecker({
@@ -165,6 +165,7 @@ export default function AsinConflictChecker({
   );
 
   const hasInput = stylesInput.trim().length > 0 || asinsInput.trim().length > 0;
+
   const hasBothInputs =
     stylesInput.trim().length > 0 && asinsInput.trim().length > 0;
 
@@ -323,7 +324,10 @@ export default function AsinConflictChecker({
     try {
       const headerColumns = [
         'Style',
-        ...Array.from({ length: maxAsins }, (_, index) => `Parent ASIN ${index + 1}`),
+        ...Array.from(
+          { length: maxAsins },
+          (_, index) => `Parent ASIN ${index + 1}`
+        ),
       ];
 
       const rows = conflicts.map((conflict) => [
@@ -347,7 +351,10 @@ export default function AsinConflictChecker({
 
     const headers = [
       'Style',
-      ...Array.from({ length: maxAsins }, (_, index) => `Parent ASIN ${index + 1}`),
+      ...Array.from(
+        { length: maxAsins },
+        (_, index) => `Parent ASIN ${index + 1}`
+      ),
     ];
 
     const rows = conflicts.map((conflict) => [
@@ -386,14 +393,17 @@ export default function AsinConflictChecker({
   const strongTextClass = isDark ? 'text-white' : 'text-gray-900';
 
   return (
-    <div className="flex h-full w-full flex-col">
+    <div className="flex h-full w-full max-w-full flex-col overflow-hidden">
+      {/* Header */}
       <div className="mb-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className={`mb-1 text-2xl font-bold ${strongTextClass}`}>
+          <div className="min-w-0">
+            <h2
+              className={`mb-1 break-words text-xl font-bold sm:text-2xl ${strongTextClass}`}
+            >
               Multiple Parent ASIN Checker
             </h2>
-            <p className={`text-sm ${mutedTextClass}`}>
+            <p className={`max-w-3xl text-sm leading-6 ${mutedTextClass}`}>
               Identify styles that have multiple unique parent ASINs mapped to
               them.
             </p>
@@ -402,7 +412,7 @@ export default function AsinConflictChecker({
           <button
             type="button"
             onClick={() => setShowHelp((current) => !current)}
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:w-auto ${
               isDark
                 ? 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/60'
                 : 'bg-gray-200/70 text-gray-700 hover:bg-gray-300/70'
@@ -456,6 +466,7 @@ export default function AsinConflictChecker({
         )}
       </div>
 
+      {/* Feedback */}
       {feedback && (
         <div
           className={`mb-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${
@@ -473,24 +484,28 @@ export default function AsinConflictChecker({
           }`}
         >
           {feedback.type === 'success' ? (
-            <CheckCircle className="h-4 w-4" />
+            <CheckCircle className="h-4 w-4 flex-shrink-0" />
           ) : (
-            <AlertCircle className="h-4 w-4" />
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
           )}
-          {feedback.message}
+          <span>{feedback.message}</span>
         </div>
       )}
 
-      <div className={`flex flex-1 flex-col overflow-hidden rounded-xl border ${cardClass}`}>
+      {/* Main Card */}
+      <div
+        className={`flex flex-1 flex-col overflow-hidden rounded-xl border ${cardClass}`}
+      >
+        {/* Action Bar */}
         <div
-          className={`flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between ${panelHeaderClass}`}
+          className={`flex flex-col gap-3 border-b p-4 xl:flex-row xl:items-center xl:justify-between ${panelHeaderClass}`}
         >
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap">
             <button
               type="button"
               onClick={handleRun}
               disabled={!hasBothInputs || isChecking}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isChecking ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -504,7 +519,7 @@ export default function AsinConflictChecker({
               type="button"
               onClick={handleClear}
               disabled={!hasInput && conflicts.length === 0}
-              className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 isDark
                   ? 'border-red-600/30 bg-red-600/20 text-red-400 hover:bg-red-600/30'
                   : 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200'
@@ -519,7 +534,7 @@ export default function AsinConflictChecker({
                 <button
                   type="button"
                   onClick={handleCopyResults}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${
+                  className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${
                     isDark
                       ? 'border-blue-600/30 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
                       : 'border-blue-300 bg-blue-100 text-blue-700 hover:bg-blue-200'
@@ -532,7 +547,7 @@ export default function AsinConflictChecker({
                 <button
                   type="button"
                   onClick={handleExportCSV}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${
+                  className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${
                     isDark
                       ? 'border-purple-600/30 bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
                       : 'border-purple-300 bg-purple-100 text-purple-700 hover:bg-purple-200'
@@ -545,11 +560,11 @@ export default function AsinConflictChecker({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between xl:justify-end">
             <button
               type="button"
               onClick={loadSampleData}
-              className={`inline-flex items-center gap-2 text-sm ${
+              className={`inline-flex items-center justify-center gap-2 text-sm ${
                 isDark
                   ? 'text-slate-400 hover:text-slate-200'
                   : 'text-gray-600 hover:text-gray-900'
@@ -560,7 +575,11 @@ export default function AsinConflictChecker({
             </button>
 
             {lastRan && (
-              <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
+              <div
+                className={`text-center text-xs sm:text-left ${
+                  isDark ? 'text-slate-400' : 'text-gray-600'
+                }`}
+              >
                 Last run:{' '}
                 <span className="font-mono text-cyan-500">
                   {lastRan.date} {lastRan.time}
@@ -570,6 +589,7 @@ export default function AsinConflictChecker({
           </div>
         </div>
 
+        {/* Warning */}
         {lineCountMismatch && (
           <div
             className={`border-b px-4 py-2 text-xs ${
@@ -583,33 +603,56 @@ export default function AsinConflictChecker({
           </div>
         )}
 
+        {/* Stats */}
         {stats && (
           <div
-            className={`grid grid-cols-2 gap-2 border-b p-4 text-sm md:grid-cols-4 ${
+            className={`grid grid-cols-2 gap-2 border-b p-4 text-sm sm:grid-cols-4 ${
               isDark ? 'border-slate-700' : 'border-gray-300'
             }`}
           >
             <StatCard label="Total Rows" value={stats.totalRows} theme={theme} />
             <StatCard label="Valid Pairs" value={stats.validPairs} theme={theme} />
-            <StatCard label="Unique Styles" value={stats.uniqueStyles} theme={theme} />
-            <StatCard label="Ignored Rows" value={stats.ignoredRows} theme={theme} />
+            <StatCard
+              label="Unique Styles"
+              value={stats.uniqueStyles}
+              theme={theme}
+            />
+            <StatCard
+              label="Ignored Rows"
+              value={stats.ignoredRows}
+              theme={theme}
+            />
           </div>
         )}
 
-        <div className={`border-b ${isDark ? 'border-slate-700' : 'border-gray-300'}`}>
+        {/* Inputs */}
+        <div
+          className={`border-b ${
+            isDark ? 'border-slate-700' : 'border-gray-300'
+          }`}
+        >
           <div
             className={`grid grid-cols-1 md:grid-cols-2 ${
               isDark ? 'bg-slate-800/30' : 'bg-gray-100/50'
             }`}
           >
-            <InputHeader title="📦 Style IDs" subtitle="one per line" isDark={isDark} bordered />
-            <InputHeader title="🔗 Parent ASINs" subtitle="one per line" isDark={isDark} />
+            <InputHeader
+              title="📦 Style IDs"
+              subtitle="one per line"
+              isDark={isDark}
+              bordered
+            />
+            <InputHeader
+              title="🔗 Parent ASINs"
+              subtitle="one per line"
+              isDark={isDark}
+            />
           </div>
 
-          <div className="grid h-[28rem] grid-cols-1 md:grid-cols-2">
+          <div className="grid grid-cols-1 md:grid-cols-2">
             <textarea
               ref={stylesTextareaRef}
-              className={`h-full w-full resize-none border-b p-4 font-mono text-sm focus:outline-none md:border-b-0 md:border-r ${
+              className={`h-64 w-full resize-none border-b p-4 font-mono text-sm focus:outline-none sm:h-72 md:h-[28rem] md:border-b-0 md:border-r ${
                 isDark
                   ? 'border-slate-700 bg-transparent text-slate-200 placeholder-slate-600 focus:bg-slate-800/30'
                   : 'border-gray-300 bg-transparent text-gray-900 placeholder-gray-400 focus:bg-gray-100/50'
@@ -619,7 +662,8 @@ export default function AsinConflictChecker({
               onChange={(event) => setStylesInput(event.target.value)}
               onScroll={(event) => {
                 if (asinsTextareaRef.current) {
-                  asinsTextareaRef.current.scrollTop = event.currentTarget.scrollTop;
+                  asinsTextareaRef.current.scrollTop =
+                    event.currentTarget.scrollTop;
                 }
               }}
               disabled={isChecking}
@@ -628,7 +672,7 @@ export default function AsinConflictChecker({
 
             <textarea
               ref={asinsTextareaRef}
-              className={`h-full w-full resize-none p-4 font-mono text-sm focus:outline-none ${
+              className={`h-64 w-full resize-none p-4 font-mono text-sm focus:outline-none sm:h-72 md:h-[28rem] ${
                 isDark
                   ? 'bg-transparent text-slate-200 placeholder-slate-600 focus:bg-slate-800/30'
                   : 'bg-transparent text-gray-900 placeholder-gray-400 focus:bg-gray-100/50'
@@ -638,7 +682,8 @@ export default function AsinConflictChecker({
               onChange={(event) => setAsinsInput(event.target.value)}
               onScroll={(event) => {
                 if (stylesTextareaRef.current) {
-                  stylesTextareaRef.current.scrollTop = event.currentTarget.scrollTop;
+                  stylesTextareaRef.current.scrollTop =
+                    event.currentTarget.scrollTop;
                 }
               }}
               disabled={isChecking}
@@ -647,6 +692,7 @@ export default function AsinConflictChecker({
           </div>
         </div>
 
+        {/* Results */}
         <div className="flex min-h-[300px] flex-1 flex-col">
           <div
             className={`flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
@@ -655,7 +701,7 @@ export default function AsinConflictChecker({
                 : 'border-gray-300 bg-gray-100/50'
             }`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className={`text-sm font-semibold ${strongTextClass}`}>
                 Results
               </span>
@@ -696,70 +742,72 @@ export default function AsinConflictChecker({
             )}
 
             {conflicts.length > 0 && (
-              <div className="min-w-max">
-                <div
-                  className={`sticky top-0 flex border-b ${
-                    isDark
-                      ? 'border-slate-700 bg-slate-800'
-                      : 'border-gray-300 bg-gray-200'
-                  }`}
-                >
+              <div className="w-full overflow-x-auto">
+                <div className="min-w-[720px]">
                   <div
-                    className={`w-96 border-r p-3 text-xs font-semibold ${
+                    className={`sticky top-0 grid grid-cols-[18rem_1fr] border-b ${
                       isDark
-                        ? 'border-slate-700 text-slate-300'
-                        : 'border-gray-300 text-gray-700'
-                    }`}
-                  >
-                    Style ID
-                  </div>
-                  <div
-                    className={`flex-1 p-3 text-xs font-semibold ${
-                      isDark ? 'text-slate-300' : 'text-gray-700'
-                    }`}
-                  >
-                    Unique Parent ASINs
-                  </div>
-                </div>
-
-                {conflicts.map((conflict) => (
-                  <div
-                    key={conflict.style}
-                    className={`flex border-b transition-colors ${
-                      isDark
-                        ? 'border-slate-700/50 hover:bg-slate-800/30'
-                        : 'border-gray-200 hover:bg-gray-100/50'
+                        ? 'border-slate-700 bg-slate-800'
+                        : 'border-gray-300 bg-gray-200'
                     }`}
                   >
                     <div
-                      className={`w-96 truncate border-r p-3 text-sm font-medium ${
+                      className={`border-r p-3 text-xs font-semibold ${
                         isDark
-                          ? 'border-slate-700/50 bg-yellow-600/5 text-slate-200'
-                          : 'border-gray-200 bg-yellow-100/30 text-gray-800'
+                          ? 'border-slate-700 text-slate-300'
+                          : 'border-gray-300 text-gray-700'
                       }`}
-                      title={conflict.style}
                     >
-                      {conflict.style}
+                      Style ID
                     </div>
-
-                    <div className="flex-1 p-3">
-                      <div className="flex flex-wrap gap-2">
-                        {conflict.asins.map((asin) => (
-                          <span
-                            key={`${conflict.style}-${asin}`}
-                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-xs ${
-                              isDark
-                                ? 'border-red-600/20 bg-red-600/10 text-red-400'
-                                : 'border-red-300 bg-red-100 text-red-700'
-                            }`}
-                          >
-                            {asin}
-                          </span>
-                        ))}
-                      </div>
+                    <div
+                      className={`p-3 text-xs font-semibold ${
+                        isDark ? 'text-slate-300' : 'text-gray-700'
+                      }`}
+                    >
+                      Unique Parent ASINs
                     </div>
                   </div>
-                ))}
+
+                  {conflicts.map((conflict) => (
+                    <div
+                      key={conflict.style}
+                      className={`grid grid-cols-[18rem_1fr] border-b transition-colors ${
+                        isDark
+                          ? 'border-slate-700/50 hover:bg-slate-800/30'
+                          : 'border-gray-200 hover:bg-gray-100/50'
+                      }`}
+                    >
+                      <div
+                        className={`truncate border-r p-3 text-sm font-medium ${
+                          isDark
+                            ? 'border-slate-700/50 bg-yellow-600/5 text-slate-200'
+                            : 'border-gray-200 bg-yellow-100/30 text-gray-800'
+                        }`}
+                        title={conflict.style}
+                      >
+                        {conflict.style}
+                      </div>
+
+                      <div className="p-3">
+                        <div className="flex flex-wrap gap-2">
+                          {conflict.asins.map((asin) => (
+                            <span
+                              key={`${conflict.style}-${asin}`}
+                              className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-xs ${
+                                isDark
+                                  ? 'border-red-600/20 bg-red-600/10 text-red-400'
+                                  : 'border-red-300 bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {asin}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -791,7 +839,11 @@ function StatCard({
       <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
         {label}
       </p>
-      <p className={`mt-1 text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+      <p
+        className={`mt-1 text-lg font-semibold ${
+          isDark ? 'text-white' : 'text-gray-900'
+        }`}
+      >
         {value}
       </p>
     </div>
@@ -811,7 +863,7 @@ function InputHeader({
 }) {
   return (
     <div
-      className={`flex items-center gap-2 p-3 text-sm font-semibold ${
+      className={`flex flex-wrap items-center gap-2 p-3 text-sm font-semibold ${
         bordered ? 'md:border-r' : ''
       } ${
         isDark
@@ -847,7 +899,7 @@ function EmptyResult({
   const isDark = theme === 'dark';
 
   return (
-    <div className="flex h-64 flex-col items-center justify-center text-center">
+    <div className="flex h-64 flex-col items-center justify-center px-4 text-center">
       <div
         className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
           success
@@ -862,10 +914,16 @@ function EmptyResult({
         {icon}
       </div>
 
-      <p className={`font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+      <p
+        className={`font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}
+      >
         {title}
       </p>
-      <p className={`mt-1 text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+      <p
+        className={`mt-1 max-w-md text-sm ${
+          isDark ? 'text-slate-500' : 'text-gray-500'
+        }`}
+      >
         {description}
       </p>
     </div>

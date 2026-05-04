@@ -104,21 +104,24 @@ export default function DownloadPage({ theme = 'dark' }: DownloadPageProps) {
       return;
     }
 
-    setDownloads((previous) => previous.filter((item) => item.id !== row.id));
+    setDownloads((prev) => prev.filter((item) => item.id !== row.id));
   };
 
   const cardClass = isDark
     ? 'border-slate-700/50 bg-slate-900/50'
-    : 'border-gray-200 bg-white/80';
+    : 'border-gray-200 bg-white';
 
   const textClass = isDark ? 'text-white' : 'text-gray-900';
   const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="w-full max-w-full space-y-6 overflow-hidden">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className={`text-2xl font-bold ${textClass}`}>Downloads</h1>
+          <h1 className={`text-xl font-bold sm:text-2xl ${textClass}`}>
+            Downloads
+          </h1>
           <p className={`mt-1 text-sm ${mutedText}`}>
             Download generated files from completed SKU batches.
           </p>
@@ -128,7 +131,7 @@ export default function DownloadPage({ theme = 'dark' }: DownloadPageProps) {
           type="button"
           onClick={fetchDownloads}
           disabled={isLoading}
-          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+          className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors sm:w-auto ${
             isDark
               ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700'
               : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
@@ -143,6 +146,7 @@ export default function DownloadPage({ theme = 'dark' }: DownloadPageProps) {
         </button>
       </div>
 
+      {/* Feedback */}
       {feedback && (
         <div
           className={`rounded-lg border px-4 py-3 text-sm ${
@@ -155,12 +159,15 @@ export default function DownloadPage({ theme = 'dark' }: DownloadPageProps) {
         </div>
       )}
 
+      {/* Table */}
       <div className={`overflow-hidden rounded-xl border shadow-lg ${cardClass}`}>
-        <div className="overflow-auto">
-          <table className="w-full min-w-[900px] text-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-[820px] w-full text-sm">
             <thead
               className={
-                isDark ? 'bg-cyan-950/70 text-white' : 'bg-cyan-900 text-white'
+                isDark
+                  ? 'bg-cyan-950/70 text-white'
+                  : 'bg-cyan-900 text-white'
               }
             >
               <tr>
@@ -183,7 +190,10 @@ export default function DownloadPage({ theme = 'dark' }: DownloadPageProps) {
                 </tr>
               ) : downloads.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center text-slate-400">
+                  <td
+                    colSpan={7}
+                    className="py-16 text-center text-slate-400"
+                  >
                     No downloadable files yet.
                   </td>
                 </tr>
@@ -200,9 +210,12 @@ export default function DownloadPage({ theme = 'dark' }: DownloadPageProps) {
                     }`}
                   >
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
-                        <span className={textClass}>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <FileSpreadsheet className="h-4 w-4 flex-shrink-0 text-emerald-400" />
+                        <span
+                          className={`truncate ${textClass}`}
+                          title={row.filename ?? 'Generated export'}
+                        >
                           {row.filename ?? 'Generated export'}
                         </span>
                       </div>
