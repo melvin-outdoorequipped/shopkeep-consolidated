@@ -17,7 +17,6 @@ import {
   Settings,
   User,
   X,
-  Building2, // Added for Get Brand icon
 } from 'lucide-react';
 
 import SkuProcessor from './components/SkuProcessor';
@@ -29,7 +28,7 @@ import Terms from './components/terms';
 import DownloadPage from './components/download';
 
 type Theme = 'light' | 'dark';
-type ToolId = 'sku' | 'asin' | 'basecamp' | 'brand'; // Added 'brand' type
+type ToolId = 'sku' | 'asin' | 'basecamp';
 type MainMenuId = 'Dashboard' | 'Tools' | 'Downloads' | 'Documentation' | 'Terms';
 
 interface MenuItem {
@@ -44,7 +43,7 @@ interface ToolItem {
   name: string;
   description: string;
   icon: ReactNode;
-  accent: 'emerald' | 'cyan' | 'violet' | 'orange'; // Added 'orange' accent
+  accent: 'emerald' | 'cyan' | 'violet';
   comingSoon?: boolean;
 }
 
@@ -80,14 +79,6 @@ const toolsSubItems: ToolItem[] = [
     icon: <MessageSquare className="h-4 w-4" />,
     accent: 'violet',
   },
-  {
-    id: 'brand',
-    name: 'Get Brand',
-    description: 'Upload SKU lists and retrieve brand names.',
-    icon: <Building2 className="h-4 w-4" />,
-    accent: 'orange',
-    comingSoon: true,
-  },
 ];
 
 // All command-palette commands
@@ -99,7 +90,6 @@ const ALL_COMMANDS = [
   { label: 'Open Shopkeep Tool', menuId: 'Tools' as MainMenuId, toolId: 'sku' as ToolId },
   { label: 'Open ASIN Checker', menuId: 'Tools' as MainMenuId, toolId: 'asin' as ToolId },
   { label: 'Open Basecamp Generator', menuId: 'Tools' as MainMenuId, toolId: 'basecamp' as ToolId },
-  { label: 'Open Get Brand', menuId: 'Tools' as MainMenuId, toolId: 'brand' as ToolId },
 ];
 
 const DEMO_NOTIFICATIONS: Notification[] = [
@@ -166,7 +156,7 @@ export default function HomePage() {
     const handler = (event: Event) => {
       const e = event as CustomEvent<{ toolId: ToolId }>;
       const toolId = e.detail?.toolId;
-      if (!['sku', 'asin', 'basecamp', 'brand'].includes(toolId)) return;
+      if (!['sku', 'asin', 'basecamp'].includes(toolId)) return;
       const found = toolsSubItems.find(t => t.id === toolId);
       if (found?.comingSoon) {
         // Show a toast or alert when trying to open coming soon tool
@@ -282,26 +272,6 @@ export default function HomePage() {
       if (activeTool === 'sku') return <SkuProcessor theme={theme} />;
       if (activeTool === 'asin') return <AsinConflictChecker theme={theme} />;
       if (activeTool === 'basecamp') return <BasecampGenerator theme={theme} />;
-      if (activeTool === 'brand') {
-        // Return a coming soon placeholder component
-        return (
-          <div className={`flex h-full min-h-[400px] items-center justify-center rounded-2xl border p-8 text-center ${
-            isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'
-          }`}>
-            <div>
-              <Building2 className={`mx-auto h-16 w-16 ${isDark ? 'text-orange-400' : 'text-orange-500'}`} />
-              <h2 className={`mt-4 text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Get Brand</h2>
-              <p className={`mt-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                Upload SKU lists and automatically retrieve brand names.
-              </p>
-              <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-orange-500/20 px-4 py-2 text-orange-400">
-                <span className="h-2 w-2 rounded-full bg-orange-400 animate-pulse" />
-                <span className="text-sm font-semibold">Coming Soon</span>
-              </div>
-            </div>
-          </div>
-        );
-      }
     }
     return null;
   };
@@ -588,9 +558,7 @@ export default function HomePage() {
                     ? 'border-violet-500/30 bg-violet-500/10 text-violet-300'
                     : selectedTool.accent === 'cyan'
                       ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
-                      : selectedTool.accent === 'orange'
-                        ? 'border-orange-500/30 bg-orange-500/10 text-orange-300'
-                        : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                      : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
                 }`}>
                   {selectedTool.name}
                 </span>
@@ -787,7 +755,6 @@ function ToolSidebarButton({
   const activeClass =
     tool.accent === 'violet' ? 'border-violet-500/40 bg-violet-500/10 text-violet-300'
     : tool.accent === 'cyan' ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
-    : tool.accent === 'orange' ? 'border-orange-500/40 bg-orange-500/10 text-orange-300'
     : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
 
   return (
@@ -821,7 +788,6 @@ function CollapsedToolButton({
   const activeColor =
     tool.accent === 'violet' ? 'border-violet-500/50 bg-violet-500/10 text-violet-300'
     : tool.accent === 'cyan' ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-300'
-    : tool.accent === 'orange' ? 'border-orange-500/50 bg-orange-500/10 text-orange-300'
     : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
 
   return (

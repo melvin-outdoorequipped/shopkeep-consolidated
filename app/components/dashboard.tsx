@@ -17,7 +17,6 @@ import {
   ShieldCheck,
   TrendingUp,
   Zap,
-  Building2, // Added for Get Brand icon
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase/client';
@@ -28,7 +27,7 @@ interface DashboardProps {
 
 interface ToolRun {
   id: string;
-  tool_type: 'sku' | 'asin' | 'basecamp' | 'brand'; // Added 'brand' type
+  tool_type: 'sku' | 'asin' | 'basecamp';
   status: 'completed' | 'failed' | 'warning';
   title: string;
   description: string | null;
@@ -40,13 +39,13 @@ interface ToolRun {
 }
 
 interface ToolCardItem {
-  id: 'sku' | 'asin' | 'basecamp' | 'brand';
+  id: 'sku' | 'asin' | 'basecamp';
   category: string;
   title: string;
   description: string;
   status: string;
   usage: string;
-  accent: 'blue' | 'green' | 'purple' | 'orange'; // Added 'orange' accent
+  accent: 'blue' | 'green' | 'purple';
   icon: React.ReactNode;
   comingSoon?: boolean;
 }
@@ -85,18 +84,6 @@ const operationTools: ToolCardItem[] = [
     accent: 'purple',
     icon: <MessageSquare className="h-4 w-4" />,
     comingSoon: false,
-  },
-  {
-  id: 'brand',
-  category: 'LISTINGS',
-  title: 'Get Brand',
-  description:
-    'Upload SKU lists and automatically retrieve the corresponding brand names for each SKU from your catalog database.',
-  status: 'Coming Soon',
-  usage: 'Unlimited',
-  accent: 'orange',
-  icon: <Building2 className="h-4 w-4" />,
-  comingSoon: true,
   },
 ];
 
@@ -250,7 +237,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
     const skuRuns = runs.filter(r => r.tool_type === 'sku').length;
     const asinRuns = runs.filter(r => r.tool_type === 'asin').length;
     const basecampRuns = runs.filter(r => r.tool_type === 'basecamp').length;
-    const brandRuns = runs.filter(r => r.tool_type === 'brand').length;
     const totalProcessed = runs.reduce((s, r) => s + Number(r.total_count ?? 0), 0);
     const totalSuccess = runs.reduce((s, r) => s + Number(r.success_count ?? 0), 0);
     const totalIssues = runs.reduce((s, r) => s + Number(r.issue_count ?? 0), 0);
@@ -262,7 +248,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
 
     return {
       totalRuns, completedRuns, warningRuns, failedRuns,
-      skuRuns, asinRuns, basecampRuns, brandRuns,
+      skuRuns, asinRuns, basecampRuns,
       totalProcessed, totalSuccess, totalIssues,
       completionRate, successRate, healthScore,
       activeTools: operationTools.filter(t => !t.comingSoon).length,
@@ -287,22 +273,21 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
       sku: getSparkline('sku'),
       asin: getSparkline('asin'),
       basecamp: getSparkline('basecamp'),
-      brand: getSparkline('brand'),
     };
   }, [runs]);
 
   const recentRuns = useMemo(() => runs.slice(0, 8), [runs]);
 
-  const navigateToTool = (toolId: 'sku' | 'asin' | 'basecamp' | 'brand') => {
+  const navigateToTool = (toolId: 'sku' | 'asin' | 'basecamp') => {
     window.dispatchEvent(new CustomEvent('navigateToTool', { detail: { toolId } }));
   };
 
-  const getRunCount = (id: 'sku' | 'asin' | 'basecamp' | 'brand') =>
-    id === 'sku' ? metrics.skuRuns : id === 'asin' ? metrics.asinRuns : id === 'basecamp' ? metrics.basecampRuns : metrics.brandRuns;
+  const getRunCount = (id: 'sku' | 'asin' | 'basecamp') =>
+    id === 'sku' ? metrics.skuRuns : id === 'asin' ? metrics.asinRuns : metrics.basecampRuns;
 
-  const getSparkline = (id: 'sku' | 'asin' | 'basecamp' | 'brand') => sparklineData[id];
+  const getSparkline = (id: 'sku' | 'asin' | 'basecamp') => sparklineData[id];
 
-  const maxToolRuns = Math.max(metrics.skuRuns, metrics.asinRuns, metrics.basecampRuns, metrics.brandRuns, 1);
+  const maxToolRuns = Math.max(metrics.skuRuns, metrics.asinRuns, metrics.basecampRuns, 1);
 
   const panelClass = isDark
     ? 'border-slate-700/50 bg-slate-900/70'
@@ -315,7 +300,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
     sku: 'Shopkeep',
     asin: 'ASIN Checker',
     basecamp: 'Basecamp',
-    brand: 'Get Brand',
   };
 
   return (
@@ -422,7 +406,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
       </section>
 
       {/* ── Tool Cards ── */}
-      <section className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 2xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-3">
         {operationTools.map(tool => (
           <ToolCard
             key={tool.id}
@@ -463,7 +447,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
             <UsageLine theme={theme} label="Shopkeep Consolidated" value={metrics.skuRuns} maxValue={maxToolRuns} color="cyan" />
             <UsageLine theme={theme} label="Multiple Parent ASIN" value={metrics.asinRuns} maxValue={maxToolRuns} color="emerald" />
             <UsageLine theme={theme} label="Basecamp Generator" value={metrics.basecampRuns} maxValue={maxToolRuns} color="violet" />
-            <UsageLine theme={theme} label="Get Brand" value={metrics.brandRuns} maxValue={maxToolRuns} color="orange" />
           </div>
 
           {/* Trend summary */}
@@ -583,20 +566,11 @@ function ToolCard({
       spark: '#06b6d4',
       count: 'text-cyan-400',
     },
-    orange: {
-      card: isDark
-        ? 'border-orange-500/25 bg-orange-950/40 hover:bg-orange-900/40 hover:border-orange-500/40'
-        : 'border-orange-200 bg-orange-50 hover:bg-orange-100',
-      badge: isDark ? 'bg-orange-500/20 text-orange-300' : 'bg-orange-100 text-orange-700',
-      spark: '#f97316',
-      count: 'text-orange-400',
-    },
   }[tool.accent];
 
   const statusBadge =
     tool.status === 'Active' ? isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
     : tool.status === 'Beta' ? isDark ? 'bg-cyan-500/20 text-cyan-300' : 'bg-cyan-100 text-cyan-700'
-    : tool.status === 'Coming Soon' ? isDark ? 'bg-orange-500/20 text-orange-300' : 'bg-orange-100 text-orange-700'
     : isDark ? 'bg-yellow-500/20 text-yellow-300' : 'bg-yellow-100 text-yellow-700';
 
   return (
@@ -626,11 +600,6 @@ function ToolCard({
       <div className="mt-3 min-w-0 flex-1">
         <h3 className={`break-words text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
           {tool.title}
-          {tool.comingSoon && (
-            <span className="ml-2 inline-flex items-center rounded-full bg-orange-500/20 px-2 py-0.5 text-xs font-medium text-orange-300">
-              🚀 Soon
-            </span>
-          )}
         </h3>
         <p className={`mt-1.5 line-clamp-3 text-sm leading-5 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
           {tool.description}
@@ -713,11 +682,11 @@ function UsageLine({
   theme, label, value, maxValue, color = 'emerald',
 }: {
   theme: 'light' | 'dark'; label: string; value: number; maxValue: number;
-  color?: 'emerald' | 'cyan' | 'violet' | 'orange';
+  color?: 'emerald' | 'cyan' | 'violet';
 }) {
   const isDark = theme === 'dark';
   const percentage = maxValue > 0 ? Math.round((value / maxValue) * 100) : 0;
-  const barColor = color === 'violet' ? 'bg-violet-500' : color === 'cyan' ? 'bg-cyan-500' : color === 'orange' ? 'bg-orange-500' : 'bg-emerald-500';
+  const barColor = color === 'violet' ? 'bg-violet-500' : color === 'cyan' ? 'bg-cyan-500' : 'bg-emerald-500';
 
   return (
     <div>
