@@ -1,3 +1,4 @@
+// lib/tara/logActivity.ts
 import { supabase } from '@/lib/supabase/client';
 
 type ToolType = 'sku' | 'asin' | 'basecamp';
@@ -16,19 +17,32 @@ interface LogToolRunInput {
 }
 
 export async function logToolRun(input: LogToolRunInput) {
-  const { error } = await supabase.from('tool_runs').insert({
-    tool_type: input.toolType,
-    status: input.status,
-    title: input.title,
-    description: input.description ?? null,
-    total_count: input.totalCount ?? 0,
-    success_count: input.successCount ?? 0,
-    issue_count: input.issueCount ?? 0,
-    filename: input.filename ?? null,
-    metadata: input.metadata ?? {},
-  });
+  try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('Cannot log tool run: No authenticated user');
+      return;
+    }
 
-  if (error) {
-    console.error('Failed to log tool run:', error);
+    const { error } = await supabase.from('tool_runs').insert({
+      tool_type: input.toolType,
+      status: input.status,
+      title: input.title,
+      description: input.description ?? null,
+      total_count: input.totalCount ?? 0,
+      success_count: input.successCount ?? 0,
+      issue_count: input.issueCount ?? 0,
+      filename: input.filename ?? null,
+      metadata: input.metadata ?? {},
+      user_id: user.id, // Add this line
+    });
+
+    if (error) {
+      console.error('Failed to log tool run:', error);
+    }
+  } catch (error) {
+    console.error('Error in logToolRun:', error);
   }
 }

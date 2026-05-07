@@ -11,6 +11,8 @@ import {
   Tag,
   Trash2,
   UploadCloud,
+  Users,
+  User,
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase/client';
@@ -35,6 +37,8 @@ interface SkuBatchRow {
   export_path: string | null;
   error: string | null;
   created_at: string;
+  user_id?: string;
+  user_email?: string;
 }
 
 interface Feedback {
@@ -112,6 +116,10 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
   const [batches, setBatches] = useState<SkuBatchRow[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<SkuBatchRow | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showAllBatches, setShowAllBatches] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const isDark = theme === 'dark';
 
@@ -126,36 +134,74 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
     }, 3500);
   };
 
-  const fetchBatches = async () => {
-    setIsLoadingBatches(true);
-
-    const { data, error } = await supabase
-      .from('sku_batches')
-      .select(
-        'id, batch_id, sku_count, unique_sku_count, duplicate_count, matched_count, status, brands_found, filename, export_path, error, created_at'
-      )
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (error) {
-      console.error(error);
-      showFeedback('error', `Failed to load batches: ${error.message}`);
-      setBatches([]);
-    } else {
-      setBatches((data ?? []) as SkuBatchRow[]);
-    }
-
-    setIsLoadingBatches(false);
-  };
-
+  // Get current user on mount
   useEffect(() => {
-    fetchBatches();
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        setUserEmail(user.email || null);
+        // Check if user is admin (based on email or custom logic)
+        const isUserAdmin = user.email === 'admin@example.com' || user.email?.includes('admin') || false;
+        setIsAdmin(isUserAdmin);
+        fetchBatches(user.id, false);
+      }
+    };
+    getUser();
   }, []);
+
+  const fetchBatches = async (uid: string, showAll: boolean) => {
+  setIsLoadingBatches(true);
+
+  let query = supabase
+    .from('sku_batches_with_users')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  // If NOT showing all, filter by user
+  if (!showAll) {
+    query = query.eq('user_id', uid);
+  }
+  // If showAll is true, no filter - shows all users' batches
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Error fetching batches:', error);
+    showFeedback('error', `Failed to load batches: ${error.message}`);
+    setBatches([]);
+  } else {
+    setBatches((data ?? []) as SkuBatchRow[]);
+  }
+
+  setIsLoadingBatches(false);
+};
+
+  const toggleFilter = () => {
+  const newShowAll = !showAllBatches;
+  setShowAllBatches(newShowAll);
+  if (userId) {
+    fetchBatches(userId, newShowAll);
+  }
+};
 
   const handleProcess = async () => {
     if (!hasValidSkus || isProcessing) {
       showFeedback('error', 'Please enter at least one valid SKU.');
       return;
+    }
+
+    if (!userId) {
+      showFeedback('error', 'User not authenticated');
+      return;
+    }
+
+    // Get current user email if not already set
+    let currentUserEmail = userEmail;
+    if (!currentUserEmail) {
+      const { data: { user } } = await supabase.auth.getUser();
+      currentUserEmail = user?.email || null;
     }
 
     const batchId = `SC-${Math.floor(100000 + Math.random() * 899999)}`;
@@ -174,6 +220,8 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
       export_path: null,
       error: null,
       created_at: now,
+      user_id: userId,
+      user_email: currentUserEmail || 'Unknown User',
     };
 
     setBatches((previous) => [temporaryRow, ...previous]);
@@ -187,6 +235,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         },
         body: JSON.stringify({
           skus: parsed.uniqueSkus.join('\n'),
+          userId: userId,
         }),
       });
 
@@ -232,7 +281,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         throw new Error('The generated export file is empty.');
       }
 
-      const exportPath = `sku-exports/${batchId}-${filename}`;
+      const exportPath = `sku-exports/${userId}/${batchId}-${filename}`;
 
       const { error: uploadError } = await supabase.storage
         .from('exports')
@@ -244,24 +293,29 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         });
 
       if (uploadError) {
-        throw uploadError;
+        console.error('Upload error:', uploadError);
+        throw new Error(`Failed to upload file: ${uploadError.message}`);
       }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('exports')
+        .getPublicUrl(exportPath);
 
       const localUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
-
       anchor.href = localUrl;
       anchor.download = filename;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-
       URL.revokeObjectURL(localUrl);
 
       const { data: insertedBatch, error: insertError } = await supabase
         .from('sku_batches')
         .insert({
           batch_id: batchId,
+          user_id: userId,
+          user_email: currentUserEmail,
           sku_count: totalRequested,
           unique_sku_count: parsed.uniqueSkus.length,
           duplicate_count: parsed.duplicateCount,
@@ -269,14 +323,15 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           status: 'completed',
           brands_found: brands,
           filename,
-          export_path: exportPath,
+          export_path: publicUrl,
         })
         .select(
-          'id, batch_id, sku_count, unique_sku_count, duplicate_count, matched_count, status, brands_found, filename, export_path, error, created_at'
+          'id, batch_id, sku_count, unique_sku_count, duplicate_count, matched_count, status, brands_found, filename, export_path, error, created_at, user_email'
         )
         .single();
 
       if (insertError) {
+        console.error('Insert error:', insertError);
         throw insertError;
       }
 
@@ -291,7 +346,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         filename,
         metadata: {
           batchId,
-          exportPath,
+          exportPath: publicUrl,
           brandsFound: brands,
           duplicateCount: parsed.duplicateCount,
         },
@@ -318,10 +373,12 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
       const message =
         error instanceof Error ? error.message : 'Unknown processing error.';
 
-      const { data: failedBatch } = await supabase
+      const { data: failedBatch, error: insertError } = await supabase
         .from('sku_batches')
         .insert({
           batch_id: batchId,
+          user_id: userId,
+          user_email: currentUserEmail,
           sku_count: parsed.rawSkus.length,
           unique_sku_count: parsed.uniqueSkus.length,
           duplicate_count: parsed.duplicateCount,
@@ -333,7 +390,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           error: message,
         })
         .select(
-          'id, batch_id, sku_count, unique_sku_count, duplicate_count, matched_count, status, brands_found, filename, export_path, error, created_at'
+          'id, batch_id, sku_count, unique_sku_count, duplicate_count, matched_count, status, brands_found, filename, export_path, error, created_at, user_email'
         )
         .single();
 
@@ -351,7 +408,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         },
       });
 
-      if (failedBatch) {
+      if (failedBatch && !insertError) {
         setBatches((previous) => [
           failedBatch as SkuBatchRow,
           ...previous.filter((batch) => batch.id !== temporaryRow.id),
@@ -377,8 +434,21 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
   };
 
   const handleDeleteBatch = async (batch: SkuBatchRow) => {
+    if (!userId) {
+      showFeedback('error', 'User not authenticated');
+      return;
+    }
+
+    if (!isAdmin && batch.user_id !== userId) {
+      showFeedback('error', 'You can only delete your own batches');
+      return;
+    }
+
     if (batch.export_path) {
-      await supabase.storage.from('exports').remove([batch.export_path]);
+      const pathMatch = batch.export_path.match(/\/exports\/(.+)$/);
+      if (pathMatch) {
+        await supabase.storage.from('exports').remove([pathMatch[1]]);
+      }
     }
 
     if (batch.id.startsWith('temp-')) {
@@ -386,10 +456,16 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
       return;
     }
 
-    const { error } = await supabase
+    const deleteQuery = supabase
       .from('sku_batches')
       .delete()
       .eq('id', batch.id);
+
+    if (!isAdmin) {
+      deleteQuery.eq('user_id', userId);
+    }
+
+    const { error } = await deleteQuery;
 
     if (error) {
       showFeedback('error', `Delete failed: ${error.message}`);
@@ -397,7 +473,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
     }
 
     setBatches((previous) => previous.filter((item) => item.id !== batch.id));
-    showFeedback('success', 'Batch deleted.');
+    showFeedback('success', 'Batch deleted successfully.');
   };
 
   const handleDownloadSummary = (batch: SkuBatchRow) => {
@@ -417,7 +493,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
 
     const csv = rows
       .map((row) =>
-        row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')
       )
       .join('\n');
 
@@ -427,21 +503,56 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
 
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
-
     anchor.href = url;
     anchor.download = `${batch.batch_id}-summary.csv`;
     anchor.click();
-
     URL.revokeObjectURL(url);
+    
+    showFeedback('success', 'Summary downloaded successfully.');
+  };
+
+  const handleDownloadExport = async (batch: SkuBatchRow) => {
+    if (!batch.export_path) {
+      showFeedback('error', 'No export file available for this batch.');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('exports')
+        .download(batch.export_path.split('/exports/')[1]);
+
+      if (error) throw error;
+
+      const url = URL.createObjectURL(data);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = batch.filename || 'export.xlsx';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      
+      showFeedback('success', 'File downloaded successfully.');
+    } catch (error) {
+      console.error('Download error:', error);
+      showFeedback('error', 'Failed to download export file.');
+    }
   };
 
   const loadSample = () => {
     setSkus(SAMPLE_SKUS);
-    showFeedback('info', 'Sample SKUs loaded.');
+    showFeedback('info', 'Sample SKUs loaded. Click Process to test.');
   };
 
   const clearInput = () => {
     setSkus('');
+  };
+
+  const refreshBatches = () => {
+    if (userId) {
+      fetchBatches(userId, showAllBatches);
+    }
   };
 
   const pageBg = isDark
@@ -480,27 +591,19 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           <div className="min-w-0 flex-1">
             <div className="mb-3 flex items-start gap-2">
               <UploadCloud className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
-
               <div className="min-w-0">
-                <h2
-                  className={`break-words text-sm font-semibold uppercase tracking-wider ${
-                    isDark ? 'text-slate-200' : 'text-gray-900'
-                  }`}
-                >
+                <h2 className={`break-words text-sm font-semibold uppercase tracking-wider ${
+                  isDark ? 'text-slate-200' : 'text-gray-900'
+                }`}>
                   Shopkeep Consolidated Tool
                 </h2>
-
-                <p
-                  className={`mt-1 text-xs leading-5 ${
-                    isDark ? 'text-slate-400' : 'text-gray-500'
-                  }`}
-                >
-                  Paste SKUs below, process, download the export, and track the
-                  batch in the table.
+                <p className={`mt-1 text-xs leading-5 ${
+                  isDark ? 'text-slate-400' : 'text-gray-500'
+                }`}>
+                  Paste SKUs below, process, download the export, and track the batch in the table.
                 </p>
               </div>
             </div>
-
             <textarea
               className={`h-40 w-full resize-none rounded-lg border p-3 font-mono text-xs focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-36 lg:h-32 ${inputClass}`}
               placeholder={`Enter SKUs one per line:\nSKU12345\nSKU67890\nSKU11111`}
@@ -514,16 +617,8 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           <div className="w-full xl:w-80">
             <div className="mb-3 grid grid-cols-3 gap-2">
               <MiniStat label="Rows" value={parsed.rawSkus.length} theme={theme} />
-              <MiniStat
-                label="Unique"
-                value={parsed.uniqueSkus.length}
-                theme={theme}
-              />
-              <MiniStat
-                label="Dupes"
-                value={parsed.duplicateCount}
-                theme={theme}
-              />
+              <MiniStat label="Unique" value={parsed.uniqueSkus.length} theme={theme} />
+              <MiniStat label="Dupes" value={parsed.duplicateCount} theme={theme} />
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto] xl:grid-cols-1 2xl:grid-cols-[1fr_auto_auto]">
@@ -533,12 +628,8 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
                 disabled={!hasValidSkus || isProcessing}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isProcessing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                {isProcessing ? 'Processing' : 'Process'}
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                {isProcessing ? 'Processing...' : 'Process SKUs'}
               </button>
 
               <button
@@ -551,7 +642,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >
-                Sample
+                Load Sample
               </button>
 
               <button
@@ -566,18 +657,17 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
                 title="Clear input"
               >
                 <Trash2 className="h-4 w-4" />
+                <span className="ml-2 sm:hidden">Clear</span>
               </button>
             </div>
 
             {parsed.duplicateCount > 0 && (
-              <div
-                className={`mt-3 rounded-lg border px-3 py-2 text-xs leading-5 ${
-                  isDark
-                    ? 'border-yellow-500/30 bg-yellow-600/10 text-yellow-400'
-                    : 'border-yellow-300 bg-yellow-100 text-yellow-800'
-                }`}
-              >
-                Duplicate SKUs detected. Only unique SKUs will be submitted.
+              <div className={`mt-3 rounded-lg border px-3 py-2 text-xs leading-5 ${
+                isDark
+                  ? 'border-yellow-500/30 bg-yellow-600/10 text-yellow-400'
+                  : 'border-yellow-300 bg-yellow-100 text-yellow-800'
+              }`}>
+                ⚠️ Duplicate SKUs detected. Only unique SKUs will be processed.
               </div>
             )}
           </div>
@@ -586,84 +676,74 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
 
       {/* Batch History */}
       <div className={`overflow-hidden rounded-xl border shadow-lg ${pageBg}`}>
-        <div
-          className={`flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
-            isDark ? 'border-slate-700/50' : 'border-gray-200'
-          }`}
-        >
+        <div className={`flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+          isDark ? 'border-slate-700/50' : 'border-gray-200'
+        }`}>
           <div className="min-w-0">
-            <h3
-              className={`text-sm font-semibold ${
-                isDark ? 'text-slate-100' : 'text-gray-900'
-              }`}
-            >
+            <h3 className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
               Batch Import History
             </h3>
-
-            <p
-              className={`mt-1 text-xs leading-5 ${
-                isDark ? 'text-slate-400' : 'text-gray-500'
-              }`}
-            >
-              Supabase-powered import records for the Shopkeep Consolidated Tool.
+            <p className={`mt-1 text-xs leading-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              {showAllBatches ? 'Showing all batches from all users' : 'Showing only your batches'}
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={fetchBatches}
-            disabled={isLoadingBatches}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 sm:w-auto ${
-              isDark
-                ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800'
-                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            {isLoadingBatches ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Refresh
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={toggleFilter}
+              disabled={isLoadingBatches}
+              className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
+                showAllBatches
+                  ? isDark
+                    ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
+                    : 'border-emerald-500 bg-emerald-50 text-emerald-600'
+                  : isDark
+                    ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800'
+                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {showAllBatches ? <Users className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
+              {showAllBatches ? 'All Batches' : 'My Batches'}
+            </button>
+
+
+            <button
+              type="button"
+              onClick={refreshBatches}
+              disabled={isLoadingBatches}
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 sm:w-auto ${
+                isDark
+                  ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800'
+                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {isLoadingBatches ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Refresh
+            </button>
+          </div>
         </div>
 
         {isLoadingBatches ? (
           <div className="px-6 py-16 text-center">
             <Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-500" />
-            <p
-              className={`mt-2 text-sm ${
-                isDark ? 'text-slate-400' : 'text-gray-500'
-              }`}
-            >
-              Loading batches...
+            <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              Loading your batches...
             </p>
           </div>
         ) : batches.length === 0 ? (
           <div className="px-6 py-16 text-center">
-            <UploadCloud
-              className={`mx-auto h-10 w-10 ${
-                isDark ? 'text-slate-500' : 'text-gray-400'
-              }`}
-            />
-            <p
-              className={`mt-2 text-sm font-medium ${
-                isDark ? 'text-slate-300' : 'text-gray-700'
-              }`}
-            >
+            <UploadCloud className={`mx-auto h-10 w-10 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
+            <p className={`mt-2 text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
               No batch records yet
             </p>
-            <p
-              className={`mt-1 text-xs ${
-                isDark ? 'text-slate-500' : 'text-gray-500'
-              }`}
-            >
-              Process SKUs to create your first import record.
+            <p className={`mt-1 text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+              Process SKUs above to create your first batch record.
             </p>
           </div>
         ) : (
           <>
-            {/* Mobile / Tablet Cards */}
+            {/* Mobile Cards */}
             <div className="grid grid-cols-1 gap-3 p-3 lg:hidden">
               {batches.map((batch) => (
                 <MobileBatchCard
@@ -673,7 +753,10 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
                   onView={() => setSelectedBatch(batch)}
                   onDelete={() => handleDeleteBatch(batch)}
                   onDownload={() => handleDownloadSummary(batch)}
-                  onRefresh={fetchBatches}
+                  onExport={() => handleDownloadExport(batch)}
+                  onRefresh={refreshBatches}
+                  isAdmin={isAdmin}
+                  currentUserId={userId}
                 />
               ))}
             </div>
@@ -681,29 +764,23 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
             {/* Desktop Table */}
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full min-w-[1180px] border-collapse text-sm">
-                <thead>
-                  <tr
-                    className={
-                      isDark
-                        ? 'bg-cyan-950/70 text-slate-100'
-                        : 'bg-cyan-900 text-white'
-                    }
-                  >
+                                <thead>
+                  <tr className={isDark ? 'bg-cyan-950/70 text-slate-100' : 'bg-cyan-900 text-white'}>
                     <th className="w-10 px-3 py-3 text-left">
                       <input type="checkbox" className="h-4 w-4 rounded" />
                     </th>
                     <TableHead>Date Imported</TableHead>
-                    <TableHead>Date Updated</TableHead>
-                    <TableHead>Import By</TableHead>
+                    <TableHead>Run By</TableHead>
                     <TableHead>Batch ID</TableHead>
-                    <TableHead>Import Name & Tool</TableHead>
-                    <TableHead>Total Items</TableHead>
+                    <TableHead>Import Name</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Unique</TableHead>
+                    <TableHead>Matched</TableHead>
                     <TableHead>Progress</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead alignRight>Actions</TableHead>
                   </tr>
                 </thead>
-
                 <tbody>
                   {batches.map((batch, index) => (
                     <BatchTableRow
@@ -714,7 +791,10 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
                       onView={() => setSelectedBatch(batch)}
                       onDelete={() => handleDeleteBatch(batch)}
                       onDownload={() => handleDownloadSummary(batch)}
-                      onRefresh={fetchBatches}
+                      onExport={() => handleDownloadExport(batch)}
+                      onRefresh={refreshBatches}
+                      isAdmin={isAdmin}
+                      currentUserId={userId}
                     />
                   ))}
                 </tbody>
@@ -729,170 +809,117 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           batch={selectedBatch}
           theme={theme}
           onClose={() => setSelectedBatch(null)}
+          onExport={() => handleDownloadExport(selectedBatch)}
         />
       )}
     </div>
   );
 }
 
+// Mobile Batch Card Component
 function MobileBatchCard({
   batch,
   theme,
   onView,
   onDelete,
   onDownload,
+  onExport,
   onRefresh,
+  isAdmin,
+  currentUserId,
 }: {
   batch: SkuBatchRow;
   theme: 'light' | 'dark';
   onView: () => void;
   onDelete: () => void;
   onDownload: () => void;
+  onExport: () => void;
   onRefresh: () => void;
+  isAdmin: boolean;
+  currentUserId: string | null;
 }) {
   const isDark = theme === 'dark';
   const progress = getProgress(batch);
   const brands = batch.brands_found ?? [];
+  const isOwnBatch = batch.user_id === currentUserId;
 
   return (
-    <div
-      className={`rounded-xl border p-4 ${
-        isDark
-          ? 'border-slate-700/60 bg-slate-950/60'
-          : 'border-gray-200 bg-white'
-      }`}
-    >
+    <div className={`rounded-xl border p-4 ${
+      isDark ? 'border-slate-700/60 bg-slate-950/60' : 'border-gray-200 bg-white'
+    } ${!isOwnBatch && isAdmin ? 'ring-1 ring-emerald-500/30' : ''}`}>
       <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-mono text-xs font-semibold text-cyan-400">
-            {batch.batch_id}
-          </p>
-
-          <h4
-            className={`mt-1 truncate text-sm font-semibold ${
-              isDark ? 'text-slate-100' : 'text-gray-900'
-            }`}
-            title={batch.filename || 'shopkeep-consolidated-tool'}
-          >
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex items-center gap-2">
+            <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-xs font-semibold text-emerald-400">
+              {batch.user_email?.[0]?.toUpperCase() || 'U'}
+            </div>
+            <p className={`truncate text-xs ${isDark ? 'text-slate-300' : 'text-gray-600'}`} title={batch.user_email}>
+              {batch.user_email || 'Unknown User'}
+              {!isOwnBatch && isAdmin && <span className="ml-2 text-[10px] text-emerald-400">(Other)</span>}
+            </p>
+          </div>
+          <p className="font-mono text-xs font-semibold text-cyan-400">{batch.batch_id}</p>
+          <h4 className={`mt-1 truncate text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`} title={batch.filename || 'shopkeep-consolidated-tool'}>
             {batch.filename || 'shopkeep-consolidated-tool'}
           </h4>
-
-          <p
-            className={`mt-1 text-xs ${
-              isDark ? 'text-slate-500' : 'text-gray-500'
-            }`}
-          >
+          <p className={`mt-1 text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
             {formatDateTime(batch.created_at)}
           </p>
         </div>
-
         <StatusBadge status={batch.status} />
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <MiniStat label="Items" value={batch.sku_count} theme={theme} />
+        <MiniStat label="Total" value={batch.sku_count} theme={theme} />
         <MiniStat label="Unique" value={batch.unique_sku_count} theme={theme} />
         <MiniStat label="Matched" value={batch.matched_count} theme={theme} />
       </div>
 
       <div className="mt-3">
         <div className="mb-1 flex items-center justify-between text-[11px]">
-          <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
-            Progress
-          </span>
-          <span className={isDark ? 'text-slate-300' : 'text-gray-700'}>
-            {progress}%
-          </span>
+          <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>Progress</span>
+          <span className={isDark ? 'text-slate-300' : 'text-gray-700'}>{progress}%</span>
         </div>
-
-        <div
-          className={`h-2 overflow-hidden rounded-full ${
-            isDark ? 'bg-slate-800' : 'bg-gray-100'
-          }`}
-        >
-          <div
-            className={`h-full rounded-full ${getProgressColor(batch.status)}`}
-            style={{ width: `${progress}%` }}
-          />
+        <div className={`h-2 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
+          <div className={`h-full rounded-full transition-all duration-300 ${getProgressColor(batch.status)}`} style={{ width: `${progress}%` }} />
         </div>
       </div>
 
-      <div className="mt-3">
-        <p
-          className={`mb-1 text-[11px] ${
-            isDark ? 'text-slate-500' : 'text-gray-500'
-          }`}
-        >
-          Brands / Tool
-        </p>
-
-        <div className="flex flex-wrap gap-1 text-xs text-cyan-400">
-          {brands.length > 0 ? (
-            brands.slice(0, 3).map((brand) => (
-              <span key={brand} className="inline-flex items-center gap-1">
+      {brands.length > 0 && (
+        <div className="mt-3">
+          <p className={`mb-1 text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>Brands Found</p>
+          <div className="flex flex-wrap gap-1">
+            {brands.slice(0, 3).map((brand) => (
+              <span key={brand} className="inline-flex items-center gap-1 rounded bg-cyan-500/20 px-2 py-0.5 text-xs text-cyan-400">
                 <Tag className="h-3 w-3" />
                 {brand}
               </span>
-            ))
-          ) : (
-            <span>listing-loader-v2</span>
-          )}
+            ))}
+            {brands.length > 3 && <span className="text-xs text-slate-500">+{brands.length - 3} more</span>}
+          </div>
         </div>
-      </div>
+      )}
 
       {batch.error && (
-        <div
-          className={`mt-3 rounded-lg border p-2 text-xs ${
-            isDark
-              ? 'border-red-500/30 bg-red-500/10 text-red-400'
-              : 'border-red-300 bg-red-50 text-red-700'
-          }`}
-        >
+        <div className={`mt-3 rounded-lg border p-2 text-xs ${
+          isDark ? 'border-red-500/30 bg-red-500/10 text-red-400' : 'border-red-300 bg-red-50 text-red-700'
+        }`}>
           {batch.error}
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-4 gap-2">
-        <button
-          type="button"
-          onClick={onDownload}
-          className="inline-flex items-center justify-center rounded-lg bg-cyan-700/70 p-2 text-white hover:bg-cyan-600"
-          title="Download summary"
-        >
-          <Download className="h-4 w-4" />
-        </button>
-
-        <button
-          type="button"
-          onClick={onView}
-          className="inline-flex items-center justify-center rounded-lg bg-cyan-700/70 p-2 text-white hover:bg-cyan-600"
-          title="View details"
-        >
-          <Eye className="h-4 w-4" />
-        </button>
-
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="inline-flex items-center justify-center rounded-lg bg-cyan-700/70 p-2 text-white hover:bg-cyan-600"
-          title="Refresh"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </button>
-
-        <button
-          type="button"
-          onClick={onDelete}
-          className="inline-flex items-center justify-center rounded-lg bg-red-600/60 p-2 text-white hover:bg-red-600"
-          title="Delete"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+      <div className="mt-4 grid grid-cols-5 gap-2">
+        <ActionButtonSmall icon={<Download className="h-4 w-4" />} label="Summary" onClick={onDownload} color="cyan" />
+        <ActionButtonSmall icon={<Download className="h-4 w-4" />} label="Export" onClick={onExport} color="emerald" disabled={!batch.export_path} />
+        <ActionButtonSmall icon={<Eye className="h-4 w-4" />} label="View" onClick={onView} color="cyan" />
+        <ActionButtonSmall icon={<RefreshCw className="h-4 w-4" />} label="Refresh" onClick={onRefresh} color="cyan" />
+        <ActionButtonSmall icon={<Trash2 className="h-4 w-4" />} label="Delete" onClick={onDelete} color="red" />
       </div>
     </div>
   );
 }
 
+// Desktop Table Row Component
 function BatchTableRow({
   batch,
   index,
@@ -900,7 +927,10 @@ function BatchTableRow({
   onView,
   onDelete,
   onDownload,
+  onExport,
   onRefresh,
+  isAdmin,
+  currentUserId,
 }: {
   batch: SkuBatchRow;
   index: number;
@@ -908,247 +938,159 @@ function BatchTableRow({
   onView: () => void;
   onDelete: () => void;
   onDownload: () => void;
+  onExport: () => void;
   onRefresh: () => void;
+  isAdmin: boolean;
+  currentUserId: string | null;
 }) {
   const isDark = theme === 'dark';
   const progress = getProgress(batch);
   const brands = batch.brands_found ?? [];
+  const isOwnBatch = batch.user_id === currentUserId;
 
   return (
-    <tr
-      className={`border-b transition-colors ${
-        isDark
-          ? index % 2 === 0
-            ? 'border-slate-700/60 bg-slate-950/60 hover:bg-slate-800/70'
-            : 'border-slate-700/60 bg-slate-800/60 hover:bg-slate-800/90'
-          : index % 2 === 0
-            ? 'border-gray-200 bg-white hover:bg-gray-50'
-            : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
-      }`}
-    >
+    <tr className={`border-b transition-colors ${
+      isDark
+        ? index % 2 === 0
+          ? 'border-slate-700/60 bg-slate-950/60 hover:bg-slate-800/70'
+          : 'border-slate-700/60 bg-slate-800/60 hover:bg-slate-800/90'
+        : index % 2 === 0
+          ? 'border-gray-200 bg-white hover:bg-gray-50'
+          : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+    } ${!isOwnBatch && isAdmin ? 'ring-1 ring-emerald-500/30' : ''}`}>
       <td className="px-3 py-3">
         <input type="checkbox" className="h-4 w-4 rounded" />
       </td>
-
-      <td
-        className={`whitespace-nowrap px-4 py-3 text-xs ${
-          isDark ? 'text-slate-200' : 'text-gray-700'
-        }`}
-      >
+      <td className={`whitespace-nowrap px-4 py-3 text-xs ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
         {formatDateTime(batch.created_at)}
       </td>
-
-      <td
-        className={`whitespace-nowrap px-4 py-3 text-xs ${
-          isDark ? 'text-slate-200' : 'text-gray-700'
-        }`}
-      >
-        {formatDateTime(batch.created_at)}
-      </td>
-
-      <td
-        className={`px-4 py-3 text-xs ${
-          isDark ? 'text-slate-100' : 'text-gray-800'
-        }`}
-      >
-        <div className="flex items-center gap-2 whitespace-nowrap">
-          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-700/50 text-[10px] text-white">
-            T
+      <td className={`whitespace-nowrap px-4 py-3 text-xs ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
+        <div className="flex items-center gap-2">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-xs font-semibold text-emerald-400">
+            {batch.user_email?.[0]?.toUpperCase() || 'U'}
           </div>
-          <span>TARA User</span>
+          <span className="truncate max-w-[150px]" title={batch.user_email}>
+            {batch.user_email || 'Unknown User'}
+            {!isOwnBatch && isAdmin && <span className="ml-2 text-[10px] text-emerald-400">(Other)</span>}
+          </span>
         </div>
       </td>
-
-      <td
-        className={`whitespace-nowrap px-4 py-3 font-mono text-xs ${
-          isDark ? 'text-slate-100' : 'text-gray-800'
-        }`}
-      >
+      <td className={`whitespace-nowrap px-4 py-3 font-mono text-xs ${isDark ? 'text-slate-100' : 'text-gray-800'}`}>
         {batch.batch_id}
       </td>
-
       <td className="px-4 py-3 text-xs">
-        <div
-          className={`max-w-[260px] truncate ${
-            isDark ? 'text-slate-100' : 'text-gray-800'
-          }`}
-          title={batch.filename || 'shopkeep-consolidated-tool'}
-        >
+        <div className={`max-w-[200px] truncate font-medium ${isDark ? 'text-slate-100' : 'text-gray-800'}`} title={batch.filename || 'shopkeep-consolidated-tool'}>
           {batch.filename || 'shopkeep-consolidated-tool'}
         </div>
-
-        <div className="mt-0.5 flex max-w-[260px] flex-wrap gap-1 text-cyan-400">
-          {brands.length > 0 ? (
-            brands.slice(0, 2).map((brand) => (
-              <span key={brand} className="inline-flex items-center gap-1">
-                <Tag className="h-3 w-3" />
+        {brands.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {brands.slice(0, 2).map((brand) => (
+              <span key={brand} className="inline-flex items-center gap-1 text-[10px] text-cyan-400">
+                <Tag className="h-2.5 w-2.5" />
                 {brand}
               </span>
-            ))
-          ) : (
-            <span>listing-loader-v2</span>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </td>
-
       <td className="px-4 py-3">
         <span className="inline-flex rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-cyan-400">
           {batch.sku_count}
         </span>
       </td>
-
+      <td className="px-4 py-3 text-xs">{batch.unique_sku_count}</td>
+      <td className="px-4 py-3 text-xs">
+        <span className="font-semibold text-emerald-400">{batch.matched_count}</span>
+      </td>
       <td className="px-4 py-3">
-        <div className="w-32 sm:w-36">
-          <div className="h-1.5 overflow-hidden rounded-full bg-slate-700/70">
-            <div
-              className={`h-full rounded-full ${getProgressColor(batch.status)}`}
-              style={{ width: `${progress}%` }}
-            />
+        <div className="w-32">
+          <div className="flex items-center justify-between text-[10px] mb-1">
+            <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>{progress}%</span>
           </div>
-
-          <p className="mt-1 whitespace-nowrap text-[10px] text-slate-300">
-            {progress}% of {batch.sku_count} items
-          </p>
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-700/70">
+            <div className={`h-full rounded-full transition-all duration-300 ${getProgressColor(batch.status)}`} style={{ width: `${progress}%` }} />
+          </div>
         </div>
       </td>
-
       <td className="px-4 py-3">
         <StatusBadge status={batch.status} />
       </td>
-
       <td className="px-4 py-3">
         <div className="flex justify-end gap-1.5">
-          <ActionButton
-            label="Download summary"
-            icon={<Download className="h-3.5 w-3.5" />}
-            color="cyan"
-            onClick={onDownload}
-          />
-
-          <ActionButton
-            label="View details"
-            icon={<Eye className="h-3.5 w-3.5" />}
-            color="cyan"
-            onClick={onView}
-          />
-
-          <ActionButton
-            label="Refresh"
-            icon={<RefreshCw className="h-3.5 w-3.5" />}
-            color="cyan"
-            onClick={onRefresh}
-          />
-
-          <ActionButton
-            label="Delete"
-            icon={<Trash2 className="h-3.5 w-3.5" />}
-            color="red"
-            onClick={onDelete}
-          />
+          <ActionButtonSmall icon={<Download className="h-3.5 w-3.5" />} label="Download Summary" onClick={onDownload} color="cyan" />
+          <ActionButtonSmall icon={<Download className="h-3.5 w-3.5" />} label="Download Export" onClick={onExport} color="emerald" disabled={!batch.export_path} />
+          <ActionButtonSmall icon={<Eye className="h-3.5 w-3.5" />} label="View Details" onClick={onView} color="cyan" />
+          <ActionButtonSmall icon={<RefreshCw className="h-3.5 w-3.5" />} label="Refresh" onClick={onRefresh} color="cyan" />
+          <ActionButtonSmall icon={<Trash2 className="h-3.5 w-3.5" />} label="Delete" onClick={onDelete} color="red" />
         </div>
       </td>
     </tr>
   );
 }
 
-function TableHead({
-  children,
-  alignRight = false,
-}: {
-  children: ReactNode;
-  alignRight?: boolean;
-}) {
+// Helper Components (defined once)
+function TableHead({ children, alignRight = false }: { children: ReactNode; alignRight?: boolean }) {
   return (
-    <th
-      className={`whitespace-nowrap px-4 py-3 text-xs font-semibold ${
-        alignRight ? 'text-right' : 'text-left'
-      }`}
-    >
+    <th className={`whitespace-nowrap px-4 py-3 text-xs font-semibold ${alignRight ? 'text-right' : 'text-left'}`}>
       {children}
     </th>
   );
 }
 
 function StatusBadge({ status }: { status: BatchStatus }) {
-  const statusClass =
-    status === 'completed'
-      ? 'bg-emerald-500/30 text-emerald-100'
-      : status === 'processing'
-        ? 'bg-orange-400 text-orange-950'
-        : status === 'failed'
-          ? 'bg-red-500/30 text-red-100'
-          : 'bg-slate-500/30 text-slate-100';
+  const statusConfig = {
+    completed: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    processing: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+    failed: 'bg-red-500/20 text-red-400 border-red-500/30',
+    pending: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+  };
 
   return (
-    <span
-      className={`inline-flex whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-semibold ${statusClass}`}
-    >
+    <span className={`inline-flex whitespace-nowrap rounded-lg border px-2.5 py-1 text-xs font-semibold ${statusConfig[status]}`}>
       {getStatusLabel(status)}
     </span>
   );
 }
 
-function ActionButton({
-  label,
+function ActionButtonSmall({
   icon,
+  label,
   color,
   onClick,
+  disabled = false,
 }: {
-  label: string;
   icon: ReactNode;
-  color: 'cyan' | 'red';
+  label: string;
+  color: 'cyan' | 'red' | 'emerald';
   onClick: () => void;
+  disabled?: boolean;
 }) {
-  const colorClass =
-    color === 'red'
-      ? 'bg-red-500/50 text-white hover:bg-red-500/70'
-      : 'bg-cyan-700/70 text-cyan-50 hover:bg-cyan-600/80';
+  const colorClass = {
+    cyan: 'bg-cyan-700/70 text-cyan-50 hover:bg-cyan-600/80',
+    red: 'bg-red-500/50 text-white hover:bg-red-500/70',
+    emerald: 'bg-emerald-700/70 text-emerald-50 hover:bg-emerald-600/80',
+  };
 
   return (
     <button
       type="button"
       title={label}
       onClick={onClick}
-      className={`rounded-md p-1.5 transition-colors ${colorClass}`}
+      disabled={disabled}
+      className={`rounded-md p-1.5 transition-colors ${colorClass[color]} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
     >
       {icon}
     </button>
   );
 }
 
-function MiniStat({
-  label,
-  value,
-  theme,
-}: {
-  label: string;
-  value: number;
-  theme: 'light' | 'dark';
-}) {
+function MiniStat({ label, value, theme }: { label: string; value: number; theme: 'light' | 'dark' }) {
   const isDark = theme === 'dark';
 
   return (
-    <div
-      className={`min-w-0 rounded-lg border p-2 ${
-        isDark
-          ? 'border-slate-700/50 bg-slate-800/40'
-          : 'border-gray-200 bg-gray-50'
-      }`}
-    >
-      <p
-        className={`truncate text-[10px] uppercase ${
-          isDark ? 'text-slate-500' : 'text-gray-500'
-        }`}
-      >
-        {label}
-      </p>
-      <p
-        className={`truncate text-sm font-semibold ${
-          isDark ? 'text-slate-100' : 'text-gray-900'
-        }`}
-      >
-        {value}
-      </p>
+    <div className={`min-w-0 rounded-lg border p-2 ${isDark ? 'border-slate-700/50 bg-slate-800/40' : 'border-gray-200 bg-gray-50'}`}>
+      <p className={`truncate text-[10px] uppercase ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>{label}</p>
+      <p className={`truncate text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{value}</p>
     </div>
   );
 }
@@ -1157,81 +1099,88 @@ function BatchDetailsModal({
   batch,
   theme,
   onClose,
+  onExport,
 }: {
   batch: SkuBatchRow;
   theme: 'light' | 'dark';
   onClose: () => void;
+  onExport: () => void;
 }) {
   const isDark = theme === 'dark';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4">
-      <div
-        className={`max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border p-4 shadow-2xl sm:p-6 ${
-          isDark
-            ? 'border-slate-700 bg-slate-950 text-slate-100'
-            : 'border-gray-200 bg-white text-gray-900'
-        }`}
-      >
+      <div className={`max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border p-4 shadow-2xl sm:p-6 ${
+        isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-gray-200 bg-white text-gray-900'
+      }`}>
         <div className="mb-4 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h3 className="text-lg font-semibold">Batch Details</h3>
-            <p className="break-all font-mono text-xs text-emerald-500">
-              {batch.batch_id}
-            </p>
+            <p className="break-all font-mono text-xs text-emerald-500">{batch.batch_id}</p>
           </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className={`rounded-lg px-3 py-1 text-sm ${
-              isDark
-                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Close
-          </button>
+          <div className="flex gap-2">
+            {batch.export_path && (
+              <button
+                type="button"
+                onClick={onExport}
+                className={`rounded-lg px-3 py-1 text-sm ${
+                  isDark ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                }`}
+              >
+                Download Export
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className={`rounded-lg px-3 py-1 text-sm ${
+                isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Close
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <DetailItem label="Date Imported" value={formatDateTime(batch.created_at)} />
-          <DetailItem label="Date Updated" value={formatDateTime(batch.created_at)} />
           <DetailItem label="Status" value={getStatusLabel(batch.status)} />
           <DetailItem label="Total Items" value={String(batch.sku_count)} />
           <DetailItem label="Unique SKUs" value={String(batch.unique_sku_count)} />
           <DetailItem label="Duplicate SKUs" value={String(batch.duplicate_count)} />
           <DetailItem label="Matched SKUs" value={String(batch.matched_count)} />
           <DetailItem label="Filename" value={batch.filename ?? '—'} />
+          <DetailItem label="Match Rate" value={batch.sku_count > 0 ? `${Math.round((batch.matched_count / batch.sku_count) * 100)}%` : '0%'} />
         </div>
 
         {batch.brands_found && batch.brands_found.length > 0 && (
           <div className="mt-4">
-            <p className="mb-2 text-xs text-slate-400">Brands Found</p>
+            <p className="mb-2 text-xs font-semibold text-slate-400">Brands Found</p>
             <div className="flex flex-wrap gap-2">
               {batch.brands_found.map((brand) => (
-                <span
-                  key={brand}
-                  className="rounded bg-emerald-500/20 px-2 py-1 text-xs text-emerald-400"
-                >
-                  {brand}
-                </span>
+                <span key={brand} className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs text-emerald-400">{brand}</span>
               ))}
             </div>
           </div>
         )}
 
         {batch.export_path && (
-          <div className="mt-4 break-all rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs text-cyan-300">
-            Export path: {batch.export_path}
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-semibold text-slate-400">Export Location</p>
+            <div className="break-all rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs text-cyan-300">
+              {batch.export_path}
+            </div>
           </div>
         )}
 
         {batch.error && (
-          <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              <span className="break-words">{batch.error}</span>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-semibold text-red-400">Error Message</p>
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span className="break-words">{batch.error}</span>
+              </div>
             </div>
           </div>
         )}
@@ -1244,7 +1193,7 @@ function DetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg border border-slate-700/40 bg-slate-900/40 p-3">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 break-all text-sm">{value}</p>
+      <p className="mt-1 break-all text-sm font-medium">{value || '—'}</p>
     </div>
   );
 }

@@ -1,7 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
   BookOpen,
@@ -17,6 +16,8 @@ import {
   Settings,
   User,
   X,
+  GitBranch,
+  LogOut
 } from 'lucide-react';
 
 import SkuProcessor from './components/SkuProcessor';
@@ -26,6 +27,7 @@ import Dashboard from './components/dashboard';
 import Documentation from './components/documentation';
 import Terms from './components/terms';
 import DownloadPage from './components/download';
+import { supabase } from '@/lib/supabase/client';
 
 type Theme = 'light' | 'dark';
 type ToolId = 'sku' | 'asin' | 'basecamp';
@@ -55,6 +57,11 @@ interface Notification {
   type: 'info' | 'success' | 'warning';
 }
 
+interface User {
+  id: string;
+  email: string;
+}
+
 const STORAGE_THEME_KEY = 'theme';
 
 const toolsSubItems: ToolItem[] = [
@@ -62,14 +69,14 @@ const toolsSubItems: ToolItem[] = [
     id: 'sku',
     name: 'Shopkeep Consolidated Tool',
     description: 'Process and consolidate SKU data.',
-    icon: <Settings className="h-4 w-4" />,
+    icon: <Search className="h-4 w-4" />,
     accent: 'cyan',
   },
   {
     id: 'asin',
     name: 'Multiple Parent ASIN Checker',
     description: 'Detect styles with multiple parent ASINs.',
-    icon: <Settings className="h-4 w-4" />,
+    icon: <GitBranch className="h-4 w-4" />,
     accent: 'emerald',
   },
   {
@@ -81,7 +88,6 @@ const toolsSubItems: ToolItem[] = [
   },
 ];
 
-// All command-palette commands
 const ALL_COMMANDS = [
   { label: 'Go to Dashboard', menuId: 'Dashboard' as MainMenuId, toolId: null },
   { label: 'Go to Downloads', menuId: 'Downloads' as MainMenuId, toolId: null },
@@ -99,9 +105,134 @@ const DEMO_NOTIFICATIONS: Notification[] = [
 ];
 
 function applyTheme(theme: Theme) {
-  document.documentElement.classList.toggle('light-mode', theme === 'light');
-  document.documentElement.classList.toggle('dark-mode', theme === 'dark');
-  document.documentElement.classList.toggle('dark', theme === 'dark');
+  if (theme === 'light') {
+    document.documentElement.classList.add('light-mode');
+    document.documentElement.classList.remove('dark-mode');
+    document.documentElement.classList.remove('dark');
+  } else {
+    document.documentElement.classList.add('dark-mode');
+    document.documentElement.classList.remove('light-mode');
+    document.documentElement.classList.add('dark');
+  }
+}
+
+// Auth Component
+function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const isDark = theme === 'dark';
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (mode === 'signin') {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (error) throw error;
+        alert('Check your email for verification link!');
+      }
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className={`w-full max-w-md rounded-2xl border p-8 shadow-2xl ${
+        isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
+      }`}>
+        <div className="text-center mb-8">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500">
+            <span className="text-2xl font-bold text-white">T</span>
+          </div>
+          <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Welcome to TARA
+          </h2>
+          <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+            {mode === 'signin' ? 'Sign in to access tools' : 'Create an account to get started'}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className={`w-full rounded-lg border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                isDark 
+                  ? 'border-slate-700 bg-slate-800 text-white' 
+                  : 'border-gray-300 bg-white text-gray-900'
+              }`}
+            />
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className={`w-full rounded-lg border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                isDark 
+                  ? 'border-slate-700 bg-slate-800 text-white' 
+                  : 'border-gray-300 bg-white text-gray-900'
+              }`}
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-emerald-600 py-2.5 font-semibold text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {loading ? 'Loading...' : mode === 'signin' ? 'Sign In' : 'Sign Up'}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+            className={`text-sm ${isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-600 hover:text-emerald-500'}`}
+          >
+            {mode === 'signin' ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function HomePage() {
@@ -110,27 +241,65 @@ export default function HomePage() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>('dark');
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
-  // Command palette
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState('');
   const cmdInputRef = useRef<HTMLInputElement>(null);
 
-  // Notifications dropdown
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>(DEMO_NOTIFICATIONS);
 
-  // User dropdown
   const [userOpen, setUserOpen] = useState(false);
 
-  // Page transition
   const [isTransitioning, setIsTransitioning] = useState(false);
   const prevMenuRef = useRef<MainMenuId>('Dashboard');
 
   const isDark = theme === 'dark';
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  /* ── Menu definitions ── */
+  // Check authentication on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      setIsAuthLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser({ id: user.id, email: user.email || '' });
+      } else {
+        setShowAuthModal(true);
+      }
+      setIsAuthLoading(false);
+    };
+    
+    checkAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({ id: session.user.id, email: session.user.email || '' });
+        setShowAuthModal(false);
+      } else {
+        setUser(null);
+        setShowAuthModal(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleAuthSuccess = () => {
+    setShowAuthModal(false);
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setShowAuthModal(true);
+    setUserOpen(false);
+  };
+
   const mainMenuItems = useMemo<MenuItem[]>(() => [
     { id: 'Dashboard', label: 'Dashboard', icon: <Home className="h-5 w-5" />, shortcut: '⌘1' },
     { id: 'Tools', label: 'Tools', icon: <Settings className="h-5 w-5" />, shortcut: '⌘2' },
@@ -142,7 +311,6 @@ export default function HomePage() {
     { id: 'Terms', label: 'Terms & Conditions', icon: <FileText className="h-5 w-5" /> },
   ], []);
 
-  /* ── Theme init ── */
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_THEME_KEY) as Theme | null;
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -151,18 +319,13 @@ export default function HomePage() {
     applyTheme(init);
   }, []);
 
-  /* ── Custom nav event ── */
   useEffect(() => {
     const handler = (event: Event) => {
       const e = event as CustomEvent<{ toolId: ToolId }>;
       const toolId = e.detail?.toolId;
       if (!['sku', 'asin', 'basecamp'].includes(toolId)) return;
       const found = toolsSubItems.find(t => t.id === toolId);
-      if (found?.comingSoon) {
-        // Show a toast or alert when trying to open coming soon tool
-        console.log('Coming soon!');
-        return;
-      }
+      if (found?.comingSoon) return;
       navigateTo('Tools', toolId);
       setIsMobileSidebarOpen(false);
     };
@@ -170,22 +333,18 @@ export default function HomePage() {
     return () => window.removeEventListener('navigateToTool', handler);
   }, []);
 
-  /* ── Global keyboard shortcuts ── */
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      // ⌘K or Ctrl+K — command palette
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setCmdOpen(prev => !prev);
       }
-      // Escape — close overlays
       if (e.key === 'Escape') {
         setIsMobileSidebarOpen(false);
         setCmdOpen(false);
         setNotifOpen(false);
         setUserOpen(false);
       }
-      // ⌘1/2/3
       if ((e.metaKey || e.ctrlKey) && e.key === '1') { e.preventDefault(); navigateTo('Dashboard'); }
       if ((e.metaKey || e.ctrlKey) && e.key === '2') { e.preventDefault(); navigateTo('Tools'); }
       if ((e.metaKey || e.ctrlKey) && e.key === '3') { e.preventDefault(); navigateTo('Downloads'); }
@@ -194,14 +353,13 @@ export default function HomePage() {
     return () => window.removeEventListener('keydown', handleKey);
   }, []);
 
-  // Focus cmd input when opened
   useEffect(() => {
     if (cmdOpen) { setCmdQuery(''); setTimeout(() => cmdInputRef.current?.focus(), 50); }
   }, [cmdOpen]);
 
-  /* ── Page transition helper ── */
   const navigateTo = useCallback((menuId: MainMenuId, toolId?: ToolId) => {
-    if (menuId === prevMenuRef.current && !toolId) return;
+    if (menuId === 'Tools' && activeMainMenu === 'Tools' && !toolId) return;
+
     setIsTransitioning(true);
     setTimeout(() => {
       setActiveMainMenu(menuId);
@@ -209,7 +367,7 @@ export default function HomePage() {
       prevMenuRef.current = menuId;
       setIsTransitioning(false);
     }, 120);
-  }, []);
+  }, [activeMainMenu]);
 
   const toggleTheme = useCallback(() => {
     setTheme(cur => {
@@ -226,12 +384,20 @@ export default function HomePage() {
   };
 
   const handleToolClick = (toolId: ToolId, comingSoon?: boolean) => {
-    if (comingSoon) {
-      // You can show a toast notification here
-      console.log(`${toolId} is coming soon!`);
-      return;
+    if (comingSoon) return;
+
+    if (activeMainMenu !== 'Tools') {
+      setIsTransitioning(true);
+      setTimeout(() => {
+        setActiveMainMenu('Tools');
+        setActiveTool(toolId);
+        prevMenuRef.current = 'Tools';
+        setIsTransitioning(false);
+      }, 120);
+    } else {
+      setActiveTool(toolId);
     }
-    navigateTo('Tools', toolId);
+
     setIsMobileSidebarOpen(false);
   };
 
@@ -264,6 +430,9 @@ export default function HomePage() {
   }, [activeMainMenu, activeTool]);
 
   const renderContent = () => {
+    // Don't render content if not authenticated
+    if (!user) return null;
+    
     if (activeMainMenu === 'Dashboard') return <Dashboard theme={theme} />;
     if (activeMainMenu === 'Downloads') return <DownloadPage theme={theme} />;
     if (activeMainMenu === 'Documentation') return <Documentation theme={theme} />;
@@ -276,22 +445,38 @@ export default function HomePage() {
     return null;
   };
 
+  // Show loading state
+  if (isAuthLoading) {
+    return (
+      <div className={`flex h-screen items-center justify-center ${isDark ? 'bg-[#0F172A]' : 'bg-gray-100'}`}>
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+      </div>
+    );
+  }
+
+  // Show auth modal and hide main content when not authenticated
+  if (!user) {
+    return <AuthModal theme={theme} onSuccess={handleAuthSuccess} />;
+  }
+
   return (
     <div className={`relative flex h-screen overflow-hidden transition-colors duration-200 ${
       isDark ? 'bg-[#0F172A] text-slate-100' : 'bg-gray-100 text-gray-900'
     }`}>
+      {/* Auth Modal Overlay - Show if not authenticated */}
+      {showAuthModal && (
+        <AuthModal theme={theme} onSuccess={handleAuthSuccess} />
+      )}
 
-      {/* ── Command Palette ── */}
+      {/* Command Palette */}
       {cmdOpen && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]">
-          {/* Backdrop */}
           <button
             type="button"
             aria-label="Close command palette"
             onClick={() => setCmdOpen(false)}
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
-          {/* Panel */}
           <div className={`relative z-10 w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden ${
             isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
           }`}>
@@ -323,19 +508,13 @@ export default function HomePage() {
                   onClick={() => {
                     if (cmd.toolId) {
                       const tool = toolsSubItems.find(t => t.id === cmd.toolId);
-                      if (tool?.comingSoon) {
-                        console.log(`${tool.name} is coming soon!`);
-                        setCmdOpen(false);
-                        return;
-                      }
+                      if (tool?.comingSoon) { setCmdOpen(false); return; }
                     }
                     navigateTo(cmd.menuId, cmd.toolId ?? undefined);
                     setCmdOpen(false);
                   }}
                   className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
-                    isDark
-                      ? 'text-slate-200 hover:bg-slate-800'
-                      : 'text-gray-700 hover:bg-gray-50'
+                    isDark ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <Command className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
@@ -345,14 +524,14 @@ export default function HomePage() {
             </div>
             <div className={`border-t px-4 py-2 ${isDark ? 'border-slate-700/60' : 'border-gray-100'}`}>
               <p className={`text-[10px] ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
-                Press <kbd className="rounded px-1 py-0.5 text-[10px] font-semibold bg-slate-800 text-slate-400">⌘K</kbd> to toggle · <kbd className="rounded px-1 py-0.5 text-[10px] font-semibold bg-slate-800 text-slate-400">↑↓</kbd> navigate
+                Press <kbd className="rounded px-1 py-0.5 text-[10px] font-semibold bg-slate-800 text-slate-400">⌘K</kbd> to toggle
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Mobile Overlay ── */}
+      {/* Mobile Overlay */}
       <button
         type="button"
         aria-label="Close sidebar overlay"
@@ -362,7 +541,7 @@ export default function HomePage() {
         }`}
       />
 
-      {/* ── Sidebar ── */}
+      {/* Sidebar */}
       <aside className={`fixed left-0 top-0 z-40 flex h-full flex-col border-r shadow-2xl
         transition-transform duration-200 ease-out
         ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -381,7 +560,6 @@ export default function HomePage() {
               <div className="flex items-center gap-3">
                 <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500 shadow-lg">
                   <span className="text-lg font-bold text-white">T</span>
-                  {/* Online pulse */}
                   <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#172235] bg-emerald-400" />
                 </div>
                 <div className="min-w-0">
@@ -437,55 +615,62 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Nav */}
+        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-5">
           <SectionLabel collapsed={isSidebarCollapsed} label="MAIN MENU" />
-          <div className="space-y-1">
+
+          <div className="space-y-0.5">
             {mainMenuItems.map(item => (
-              <SidebarButton
-                key={item.id}
-                label={item.label}
-                icon={item.icon}
-                shortcut={item.shortcut}
-                active={activeMainMenu === item.id}
-                collapsed={isSidebarCollapsed}
-                theme={theme}
-                onClick={() => handleMainMenuClick(item.id)}
-              />
+              <React.Fragment key={item.id}>
+                <SidebarButton
+                  label={item.label}
+                  icon={item.icon}
+                  shortcut={item.shortcut}
+                  active={activeMainMenu === item.id}
+                  collapsed={isSidebarCollapsed}
+                  theme={theme}
+                  onClick={() => handleMainMenuClick(item.id)}
+                />
+
+                {/* Tool sub-items appear immediately after Tools button */}
+                {item.id === 'Tools' && activeMainMenu === 'Tools' && !isSidebarCollapsed && (
+                  <div className={`my-1 ml-3 space-y-0.5 border-l-2 pl-2 ${
+                    isDark ? 'border-emerald-500/25' : 'border-emerald-500/30'
+                  }`}>
+                    {toolsSubItems.map(tool => (
+                      <ToolSidebarButton
+                        key={tool.id}
+                        tool={tool}
+                        active={activeTool === tool.id}
+                        theme={theme}
+                        onClick={() => handleToolClick(tool.id, tool.comingSoon)}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Collapsed tool buttons */}
+                {item.id === 'Tools' && activeMainMenu === 'Tools' && isSidebarCollapsed && (
+                  <div className="my-1 hidden space-y-0.5 lg:block">
+                    {toolsSubItems.map(tool => (
+                      <CollapsedToolButton
+                        key={tool.id}
+                        tool={tool}
+                        active={activeTool === tool.id}
+                        theme={theme}
+                        onClick={() => handleToolClick(tool.id, tool.comingSoon)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </React.Fragment>
             ))}
           </div>
 
-          {activeMainMenu === 'Tools' && !isSidebarCollapsed && (
-            <div className="mt-3 space-y-1 px-1">
-              {toolsSubItems.map(tool => (
-                <ToolSidebarButton
-                  key={tool.id}
-                  tool={tool}
-                  active={activeTool === tool.id}
-                  theme={theme}
-                  onClick={() => handleToolClick(tool.id, tool.comingSoon)}
-                />
-              ))}
-            </div>
-          )}
-
-          {activeMainMenu === 'Tools' && isSidebarCollapsed && (
-            <div className="mt-3 hidden space-y-1 lg:block">
-              {toolsSubItems.map(tool => (
-                <CollapsedToolButton
-                  key={tool.id}
-                  tool={tool}
-                  active={activeTool === tool.id}
-                  theme={theme}
-                  onClick={() => handleToolClick(tool.id, tool.comingSoon)}
-                />
-              ))}
-            </div>
-          )}
-
+          {/* Resources section */}
           <div className="mt-7">
             <SectionLabel collapsed={isSidebarCollapsed} label="RESOURCES" />
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {resourceMenuItems.map(item => (
                 <SidebarButton
                   key={item.id}
@@ -504,7 +689,7 @@ export default function HomePage() {
         {/* Sidebar Footer */}
         <div className={`border-t p-4 ${isDark ? 'border-slate-700/60' : 'border-gray-200'}`}>
           {!isSidebarCollapsed ? (
-            <div className={`rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5`}>
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-sm font-semibold text-emerald-400">Tools ready</span>
@@ -517,17 +702,15 @@ export default function HomePage() {
         </div>
       </aside>
 
-      {/* ── Main Content ── */}
+      {/* Main Content */}
       <div className={`ml-0 flex h-full min-w-0 flex-1 flex-col transition-[margin] duration-200 ease-out ${
         isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-80'
       }`}>
-
         {/* Top Header */}
         <header className={`sticky top-0 z-20 border-b px-4 py-3 shadow-lg backdrop-blur-md sm:px-6 lg:px-8 ${
           isDark ? 'border-slate-700/50 bg-[#172235]/85' : 'border-gray-200 bg-white/85'
         }`}>
           <div className="flex min-w-0 items-center justify-between gap-3">
-            {/* Left: breadcrumb */}
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
@@ -549,9 +732,14 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Right: actions */}
             <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
-              {/* Active tool badge */}
+              {/* User email badge */}
+              {user && (
+                <span className="hidden rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-400 md:inline-flex">
+                  {user.email}
+                </span>
+              )}
+
               {activeMainMenu === 'Tools' && selectedTool && (
                 <span className={`hidden rounded-full border px-3 py-1 text-xs font-semibold md:inline-flex ${
                   selectedTool.accent === 'violet'
@@ -564,7 +752,6 @@ export default function HomePage() {
                 </span>
               )}
 
-              {/* Command palette button */}
               <button
                 type="button"
                 onClick={() => setCmdOpen(true)}
@@ -576,7 +763,6 @@ export default function HomePage() {
                 <Command className="h-4 w-4" />
               </button>
 
-              {/* Notifications */}
               <div className="relative">
                 <button
                   type="button"
@@ -624,7 +810,6 @@ export default function HomePage() {
                 )}
               </div>
 
-              {/* User avatar */}
               <div className="relative">
                 <button
                   type="button"
@@ -637,11 +822,13 @@ export default function HomePage() {
                 </button>
 
                 {userOpen && (
-                  <div className={`absolute right-0 top-full z-50 mt-2 w-52 rounded-2xl border shadow-2xl overflow-hidden ${
+                  <div className={`absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border shadow-2xl overflow-hidden ${
                     isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
                   }`}>
                     <div className={`border-b px-4 py-3 ${isDark ? 'border-slate-700/60' : 'border-gray-100'}`}>
-                      <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>TARA User</p>
+                      <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {user?.email || 'TARA User'}
+                      </p>
                       <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Beta Access · v1.0</p>
                     </div>
                     <div className="py-1">
@@ -653,6 +840,16 @@ export default function HomePage() {
                         }`}
                       >
                         {isDark ? '☀️' : '🌙'} Switch to {isDark ? 'Light' : 'Dark'} Mode
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSignOut}
+                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                          isDark ? 'text-red-400 hover:bg-slate-800' : 'text-red-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Sign Out
                       </button>
                     </div>
                   </div>
@@ -673,29 +870,40 @@ export default function HomePage() {
           </div>
         </main>
       </div>
-
-      <style jsx global>{`
-        .light-mode { --bg-primary: #ffffff; --bg-secondary: #f3f4f6; --text-primary: #111827; --text-secondary: #6b7280; --border-color: #e5e7eb; }
-        .dark-mode { --bg-primary: #0f172a; --bg-secondary: #172235; --text-primary: #f1f5f9; --text-secondary: #94a3b8; --border-color: #334155; }
-        html { scroll-behavior: smooth; }
-        ::selection { background: rgba(16, 185, 129, 0.3); }
-        * { -webkit-tap-highlight-color: transparent; }
-        @media (prefers-reduced-motion: reduce) {
-          * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
-        }
-      `}</style>
     </div>
   );
 }
 
-/* ── Sub-components ── */
+// Helper Components
+function Loader2({ className }: { className?: string }) {
+  return (
+    <svg
+      className={`animate-spin ${className}`}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      />
+    </svg>
+  );
+}
 
 function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
   return (
-    <div className="mb-3 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-      {collapsed
-        ? <span className="mx-auto block h-1 w-1 rounded-full bg-slate-600" />
-        : label}
+    <div className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+      {collapsed ? <span className="mx-auto block h-1 w-1 rounded-full bg-slate-600" /> : label}
     </div>
   );
 }
@@ -724,21 +932,15 @@ function SidebarButton({
       <span className={`flex-shrink-0 transition-colors ${active ? 'text-emerald-400' : 'group-hover:text-emerald-400'}`}>
         {icon}
       </span>
-
       <span className={`${collapsed ? 'hidden' : 'block'} min-w-0 flex-1 truncate font-medium`}>
         {label}
       </span>
-
       {!collapsed && shortcut && (
         <kbd className={`hidden rounded px-1.5 py-0.5 text-[10px] font-semibold lg:block ${
           isDark ? 'bg-slate-800 text-slate-500' : 'bg-gray-100 text-gray-400'
         }`}>{shortcut}</kbd>
       )}
-
-      {active && !collapsed && (
-        <span className="ml-1 h-7 w-1 rounded-full bg-emerald-400" />
-      )}
-
+      {active && !collapsed && <span className="ml-1 h-7 w-1 rounded-full bg-emerald-400" />}
       {collapsed && (
         <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
           {label}
@@ -752,31 +954,58 @@ function ToolSidebarButton({
   tool, active, theme, onClick,
 }: { tool: ToolItem; active: boolean; theme: Theme; onClick: () => void }) {
   const isDark = theme === 'dark';
-  const activeClass =
-    tool.accent === 'violet' ? 'border-violet-500/40 bg-violet-500/10 text-violet-300'
-    : tool.accent === 'cyan' ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
-    : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
+
+  const activeClass = tool.accent === 'violet' ? 'border-violet-500/40 bg-violet-500/10'
+    : tool.accent === 'cyan' ? 'border-cyan-500/40 bg-cyan-500/10'
+    : 'border-emerald-500/40 bg-emerald-500/10';
+
+  const activeTextClass = tool.accent === 'violet' ? 'text-violet-300'
+    : tool.accent === 'cyan' ? 'text-cyan-300'
+    : 'text-emerald-300';
+
+  const iconBgClass = tool.accent === 'violet'
+    ? isDark ? 'bg-violet-500/15 text-violet-400' : 'bg-violet-50 text-violet-600'
+    : tool.accent === 'cyan'
+      ? isDark ? 'bg-cyan-500/15 text-cyan-400' : 'bg-cyan-50 text-cyan-600'
+      : isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-600';
 
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={tool.comingSoon}
-      className={`group w-full rounded-xl border px-3 py-2.5 text-left transition-all duration-150 ${
-        tool.comingSoon ? 'cursor-not-allowed opacity-60'
-        : active ? activeClass
-        : isDark ? 'border-slate-700/40 text-slate-400 hover:bg-slate-800/60 hover:text-white'
-        : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+      className={`group w-full rounded-xl border px-2.5 py-2 text-left transition-all duration-150 ${
+        tool.comingSoon ? 'cursor-not-allowed opacity-50'
+        : active ? `${activeClass} shadow-sm`
+        : isDark ? 'border-transparent hover:bg-slate-800/50'
+        : 'border-transparent hover:bg-gray-50'
       }`}
     >
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="flex-shrink-0">{tool.icon}</span>
-        <span className="min-w-0 truncate text-sm font-semibold">{tool.name}</span>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors ${
+          active ? iconBgClass : isDark ? 'bg-slate-800 text-slate-500 group-hover:text-slate-300' : 'bg-gray-100 text-gray-400 group-hover:text-gray-600'
+        }`}>
+          {tool.icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <span className={`block truncate text-xs font-semibold transition-colors ${
+            active ? activeTextClass : isDark ? 'text-slate-300 group-hover:text-white' : 'text-gray-700 group-hover:text-gray-900'
+          }`}>
+            {tool.name}
+          </span>
+          <span className={`block truncate text-[11px] leading-tight mt-0.5 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+            {tool.description}
+          </span>
+        </div>
+        {active && (
+          <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+            tool.accent === 'violet' ? 'bg-violet-400' : tool.accent === 'cyan' ? 'bg-cyan-400' : 'bg-emerald-400'
+          }`} />
+        )}
         {tool.comingSoon && (
           <span className="ml-auto rounded-full bg-orange-500/20 px-2 py-0.5 text-[10px] font-semibold text-orange-400">Soon</span>
         )}
       </div>
-      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{tool.description}</p>
     </button>
   );
 }
@@ -785,8 +1014,7 @@ function CollapsedToolButton({
   tool, active, theme, onClick,
 }: { tool: ToolItem; active: boolean; theme: Theme; onClick: () => void }) {
   const isDark = theme === 'dark';
-  const activeColor =
-    tool.accent === 'violet' ? 'border-violet-500/50 bg-violet-500/10 text-violet-300'
+  const activeColor = tool.accent === 'violet' ? 'border-violet-500/50 bg-violet-500/10 text-violet-300'
     : tool.accent === 'cyan' ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-300'
     : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
 
@@ -804,7 +1032,7 @@ function CollapsedToolButton({
     >
       {tool.icon}
       <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
-        {tool.name} {tool.comingSoon ? '(Coming Soon)' : ''}
+        {tool.name}{tool.comingSoon ? ' (Coming Soon)' : ''}
       </span>
     </button>
   );

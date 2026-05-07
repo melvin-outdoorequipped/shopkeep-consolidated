@@ -1,3 +1,4 @@
+// app/api/process-skus/route.ts
 import { NextResponse } from 'next/server';
 import * as xlsx from 'xlsx';
 import { brandConfigs } from '../../../config/brandConfig';
@@ -17,7 +18,12 @@ const getSafeColumnValue = (row: any, columnName: string | undefined): string =>
 
 export async function POST(req: Request) {
   try {
-    const { skus } = await req.json();
+    const { skus, userId } = await req.json();
+    
+    if (!userId) {
+      console.error('No userId provided');
+      return NextResponse.json({ error: 'User ID is required' }, { status: 401 });
+    }
     
     // Split by newline, trim, and remove empty lines (supports both \n and \r\n)
     const skuArray = skus.split(/\r?\n/)
@@ -31,10 +37,12 @@ export async function POST(req: Request) {
     const consolidatedData: any[] = [];
     const brandsFound = new Set<string>();
     const matchedSkus = new Set<string>(); // Track which SKUs were matched
+    const failedBrands: string[] = []; // Track failed brands for logging
 
     // Loop through each brand configuration
     for (const config of brandConfigs) {
       try {
+        console.log(`Processing ${config.brandName}...`);
         const doc = await getGoogleSheet(config.spreadsheetId);
         
         // Grab the specific sheet
@@ -42,16 +50,19 @@ export async function POST(req: Request) {
         
         if (!sheet) {
           console.error(`No sheet found for ${config.brandName}`);
+          failedBrands.push(`${config.brandName} (no sheet found)`);
           continue;
         }
         
         const rows = await sheet.getRows();
+        let brandMatchCount = 0;
 
         // Check each row in the Google Sheet against the user's requested SKUs
         for (const row of rows) {
           const rowSku = row.get(config.columns.sku)?.toString().trim();
           
           if (rowSku && skuArray.includes(rowSku)) {
+            brandMatchCount++;
             // Track which brands we found results for
             if (config.brandName) {
               brandsFound.add(config.brandName);
@@ -77,18 +88,29 @@ export async function POST(req: Request) {
             consolidatedData.push(dataRow);
           }
         }
-      } catch (sheetError) {
-        console.error(`Failed to process sheet for ${config.brandName}:`, sheetError);
+        
+        console.log(`Found ${brandMatchCount} matches for ${config.brandName}`);
+      } catch (sheetError: any) {
+        console.error(`Failed to process sheet for ${config.brandName}:`, sheetError.message);
+        failedBrands.push(`${config.brandName} (${sheetError.message || 'Unknown error'})`);
+        // Continue with next brand instead of failing completely
+        continue;
       }
+    }
+
+    // Log failed brands for debugging
+    if (failedBrands.length > 0) {
+      console.warn('Failed to process the following brands:', failedBrands);
     }
 
     // Generate filename based on brands found
     let filename = 'Consolidated_SKUs.xlsx';
     const date = new Date().toISOString().split('T')[0];
+    const time = new Date().toISOString().split('T')[1].split('.')[0].replace(/:/g, '-');
     
     if (consolidatedData.length === 0) {
       // No matches found - return empty worksheet with headers
-      filename = `No_Matches_${date}.xlsx`;
+      filename = `No_Matches_${date}_${time}.xlsx`;
       const headers = {
         Brand: '-',
         SKU: '-',
@@ -103,19 +125,28 @@ export async function POST(req: Request) {
       };
       consolidatedData.push(headers);
     } else {
-      // Build filename with brands found
+      // Build filename with brands found and user ID for tracking
       const brandsList = Array.from(brandsFound).join('_');
-      filename = `${brandsList}_SKUs_${date}.xlsx`;
+      const userPrefix = userId.slice(0, 8); // First 8 chars of user ID
+      filename = `${brandsList}_SKUs_${date}_${time}_${userPrefix}.xlsx`;
     }
 
     // Create Excel workbook
     const worksheet = xlsx.utils.json_to_sheet(consolidatedData);
     
     // Set column widths for better readability
-    const maxWidth = 20;
-    const colWidths = Object.keys(consolidatedData[0] || {}).map(() => ({
-      wch: maxWidth,
-    }));
+    const colWidths = [
+      { wch: 15 }, // Brand
+      { wch: 20 }, // SKU
+      { wch: 15 }, // UPC
+      { wch: 25 }, // Shopkeep_Name
+      { wch: 15 }, // Style_Number
+      { wch: 30 }, // Description
+      { wch: 12 }, // Color
+      { wch: 12 }, // Color_Code
+      { wch: 10 }, // Size
+      { wch: 10 }, // Gender
+    ];
     worksheet['!cols'] = colWidths;
     
     const workbook = xlsx.utils.book_new();
@@ -127,6 +158,9 @@ export async function POST(req: Request) {
     // Return the file as a downloadable response with metadata in custom headers
     const brandsArray = Array.from(brandsFound);
     const matchCount = matchedSkus.size;
+    const unmatchedCount = skuArray.length - matchCount;
+
+    console.log(`Processing complete: ${matchCount} matched, ${unmatchedCount} unmatched from ${skuArray.length} total SKUs`);
 
     return new Response(buf, {
       status: 200,
@@ -136,11 +170,20 @@ export async function POST(req: Request) {
         'X-Brands-Found': JSON.stringify(brandsArray),
         'X-Match-Count': matchCount.toString(),
         'X-Total-Requested': skuArray.length.toString(),
+        'X-Unmatched-Count': unmatchedCount.toString(),
+        'X-User-Id': userId,
+        'X-Failed-Brands': JSON.stringify(failedBrands),
       },
     });
 
   } catch (error) {
     console.error('API Route Error:', error);
-    return NextResponse.json({ error: 'Failed to process SKUs' }, { status: 500 });
+    return NextResponse.json(
+      { 
+        error: 'Failed to process SKUs', 
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }, 
+      { status: 500 }
+    );
   }
 }
