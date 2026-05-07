@@ -117,12 +117,14 @@ function applyTheme(theme: Theme) {
 }
 
 // Auth Component
+// Auth Component with Background Image - FIXED VERSION
 function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [imageError, setImageError] = useState(false);
   const isDark = theme === 'dark';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,10 +155,44 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
     }
   };
 
+  // Option 1: Use a reliable image URL (replace with your actual image)
+  // Examples of working image URLs:
+  // - "/images/login-bg.jpg" (local file in public folder)
+  // - "https://images.unsplash.com/photo-1557682250-33bd709cbe85" (Unsplash)
+  // - "https://picsum.photos/id/104/1920/1080" (Lorem Picsum)
+  
+  const backgroundImageUrl = "/login.png";
+  // Or use a local image: "/login-background.jpg"
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className={`w-full max-w-md rounded-2xl border p-8 shadow-2xl ${
-        isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Background Image with Overlay */}
+      {!imageError && (
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: `url(${backgroundImageUrl})`,
+          }}
+        >
+          {/* Dark/Light Overlay based on theme */}
+          <div className={`absolute inset-0 ${
+            isDark ? 'bg-black/70' : 'bg-white/30'
+          }`} />
+        </div>
+      )}
+      
+      {/* Fallback gradient background if image fails to load */}
+      {imageError && (
+        <div className={`absolute inset-0 ${
+          isDark 
+            ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900' 
+            : 'bg-gradient-to-br from-gray-100 via-gray-200 to-gray-100'
+        }`} />
+      )}
+      
+      {/* Auth Modal */}
+      <div className={`relative w-full max-w-md rounded-2xl border p-8 shadow-2xl backdrop-blur-md ${
+        isDark ? 'border-slate-700 bg-slate-900/95' : 'border-gray-200 bg-white/95'
       }`}>
         <div className="text-center mb-8">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500">
@@ -165,7 +201,7 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
           <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
             Welcome to TARA
           </h2>
-          <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+          <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
             {mode === 'signin' ? 'Sign in to access tools' : 'Create an account to get started'}
           </p>
         </div>
@@ -182,8 +218,8 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
               required
               className={`w-full rounded-lg border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                 isDark 
-                  ? 'border-slate-700 bg-slate-800 text-white' 
-                  : 'border-gray-300 bg-white text-gray-900'
+                  ? 'border-slate-700 bg-slate-800/90 text-white' 
+                  : 'border-gray-300 bg-white/90 text-gray-900'
               }`}
             />
           </div>
@@ -200,8 +236,8 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
               minLength={6}
               className={`w-full rounded-lg border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                 isDark 
-                  ? 'border-slate-700 bg-slate-800 text-white' 
-                  : 'border-gray-300 bg-white text-gray-900'
+                  ? 'border-slate-700 bg-slate-800/90 text-white' 
+                  : 'border-gray-300 bg-white/90 text-gray-900'
               }`}
             />
           </div>
@@ -231,6 +267,15 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
           </button>
         </div>
       </div>
+      
+      {/* Hidden img to detect load error */}
+      <img 
+        src={backgroundImageUrl}
+        alt=""
+        className="hidden"
+        onError={() => setImageError(true)}
+        onLoad={() => setImageError(false)}
+      />
     </div>
   );
 }
