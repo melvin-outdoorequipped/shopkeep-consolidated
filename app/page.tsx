@@ -256,16 +256,6 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
             {loading ? 'Loading...' : mode === 'signin' ? 'Sign In' : 'Sign Up'}
           </button>
         </form>
-
-        <div className="mt-6 text-center">
-          <button
-            type="button"
-            onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-            className={`text-sm ${isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-600 hover:text-emerald-500'}`}
-          >
-            {mode === 'signin' ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
-          </button>
-        </div>
       </div>
       
       {/* Hidden img to detect load error */}
