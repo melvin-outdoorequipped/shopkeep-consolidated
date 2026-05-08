@@ -136,11 +136,13 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
   const [asinsInput, setAsinsInput] = useState('');
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [isChecking, setIsChecking] = useState(false);
-  const [lastRan, setLastRan] = useState<{ date: string; time: string } | null>(null);
+  const [lastRan, setLastRan] = useState<{ date: string; time: string; userEmail: string } | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [stats, setStats] = useState<RunStats | null>(null);
   const [scrollPct, setScrollPct] = useState(0);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const stylesRef = useRef<HTMLTextAreaElement>(null);
   const asinsRef = useRef<HTMLTextAreaElement>(null);
@@ -153,6 +155,18 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
   const lineCountMismatch = stylesLineCount > 0 && asinsLineCount > 0 && stylesLineCount !== asinsLineCount;
   const maxAsins = conflicts.length > 0 ? Math.max(...conflicts.map(c => c.asins.length)) : 0;
 
+  // Get current user on mount
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        setUserEmail(user.email || null);
+      }
+    };
+    getUser();
+  }, []);
+
   // Keyboard shortcut: ⌘Enter to run
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -163,7 +177,7 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [hasBothInputs, isChecking, stylesInput, asinsInput]);
+  }, [hasBothInputs, isChecking]);
 
   const showFeedback = (type: FeedbackType, message: string) => {
     setFeedback({ type, message });
@@ -189,52 +203,174 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
   };
 
   const handleRun = async () => {
-    if (!hasBothInputs) { showFeedback('error', 'Provide both Style IDs and Parent ASINs.'); return; }
+    if (!hasBothInputs) { 
+      showFeedback('error', 'Provide both Style IDs and Parent ASINs.'); 
+      return; 
+    }
+    
+    // Get current user if not already set
+    let currentUserEmail = userEmail;
+    let currentUserId = userId;
+    
+    if (!currentUserEmail || !currentUserId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        currentUserEmail = user.email || 'System';
+        currentUserId = user.id;
+        setUserEmail(currentUserEmail);
+        setUserId(currentUserId);
+      } else {
+        currentUserEmail = 'System';
+        currentUserId = null;
+      }
+    }
+    
     setIsChecking(true);
     setFeedback(null);
 
     try {
       const { pairs, totalRows, ignoredRows } = buildPairs(stylesInput, asinsInput);
-      if (pairs.length === 0) { setConflicts([]); setStats(null); showFeedback('error', 'No valid Style-ASIN pairs found.'); return; }
+      if (pairs.length === 0) { 
+        setConflicts([]); 
+        setStats(null); 
+        showFeedback('error', 'No valid Style-ASIN pairs found.'); 
+        return; 
+      }
 
       const result = findConflicts(pairs);
       const uniqueStyles = new Set(pairs.map(p => p.style)).size;
       const runStats: RunStats = { totalRows, validPairs: pairs.length, ignoredRows, uniqueStyles };
+      const conflictCount = result.length;
 
       setConflicts(result);
       setStats(runStats);
       setLastRan({
         date: new Date().toISOString().split('T')[0],
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        userEmail: currentUserEmail || 'System',
       });
 
-      await supabase.from('asin_checks').insert({
-        total_rows: totalRows, valid_pairs: pairs.length, ignored_rows: ignoredRows,
-        conflict_count: result.length, conflicts: result, status: 'completed',
-      });
+      // Save to asin_checks table with user info (handle gracefully)
+      try {
+        const insertData: any = {
+          total_rows: totalRows,
+          valid_pairs: pairs.length,
+          ignored_rows: ignoredRows,
+          conflict_count: conflictCount,
+          conflicts: result,
+          status: 'completed',
+          created_at: new Date().toISOString(),
+        };
+        
+        // Only add user_id and user_email if they exist
+        if (currentUserId) {
+          insertData.user_id = currentUserId;
+        }
+        if (currentUserEmail) {
+          insertData.user_email = currentUserEmail;
+        }
+        
+        const { error: asinError } = await supabase.from('asin_checks').insert(insertData);
+        
+        if (asinError) {
+          console.error('Error saving to asin_checks:', asinError);
+          // Don't throw - this is non-critical for the user experience
+        }
+      } catch (err) {
+        console.error('Failed to save to asin_checks:', err);
+      }
 
+      // Log to tool_runs for dashboard (this powers Top Users and Recent Activity)
       await logToolRun({
         toolType: 'asin',
-        status: result.length > 0 ? 'warning' : 'completed',
-        title: 'ASIN conflict check completed',
-        description: result.length > 0 ? `${result.length} conflict${result.length === 1 ? '' : 's'} found.` : 'No conflicts found.',
-        totalCount: pairs.length, successCount: pairs.length - result.length, issueCount: result.length,
-        metadata: { totalRows, validPairs: pairs.length, ignoredRows, uniqueStyles, conflicts: result },
+        status: conflictCount > 0 ? 'warning' : 'completed',
+        title: conflictCount > 0 
+          ? `ASIN Check: ${conflictCount} conflict${conflictCount === 1 ? '' : 's'} found` 
+          : 'ASIN Check: No conflicts found',
+        description: conflictCount > 0 
+          ? `${conflictCount} style${conflictCount === 1 ? ' has' : 's have'} multiple parent ASINs.` 
+          : 'All styles have unique parent ASINs.',
+        totalCount: pairs.length,
+        successCount: pairs.length - conflictCount,
+        issueCount: conflictCount,
+        // Remove the filename line or set to undefined
+        metadata: {
+          totalRows,
+          validPairs: pairs.length,
+          ignoredRows,
+          uniqueStyles,
+          conflicts: result,
+          userEmail: currentUserEmail,
+          userId: currentUserId,
+        },
       });
 
-      showFeedback(result.length > 0 ? 'error' : 'success',
-        result.length > 0 ? `${result.length} conflict${result.length === 1 ? '' : 's'} found.` : 'No conflicts found.');
+      showFeedback(
+        conflictCount > 0 ? 'error' : 'success',
+        conflictCount > 0 
+          ? `${conflictCount} conflict${conflictCount === 1 ? '' : 's'} found.` 
+          : 'No conflicts found.'
+      );
+      
     } catch (error) {
       const message = error instanceof Error ? error.message : 'ASIN check failed.';
-      await supabase.from('asin_checks').insert({ total_rows: 0, valid_pairs: 0, ignored_rows: 0, conflict_count: 0, conflicts: [], status: 'failed' });
-      await logToolRun({ toolType: 'asin', status: 'failed', title: 'ASIN conflict check failed', description: message, totalCount: 0, successCount: 0, issueCount: 0, metadata: { error: message } });
+      
+      // Save failed run to asin_checks (handle gracefully)
+      try {
+        const insertData: any = {
+          total_rows: 0,
+          valid_pairs: 0,
+          ignored_rows: 0,
+          conflict_count: 0,
+          conflicts: [],
+          status: 'failed',
+          error: message,
+          created_at: new Date().toISOString(),
+        };
+        
+        if (currentUserId) {
+          insertData.user_id = currentUserId;
+        }
+        if (currentUserEmail) {
+          insertData.user_email = currentUserEmail;
+        }
+        
+        await supabase.from('asin_checks').insert(insertData);
+      } catch (err) {
+        console.error('Failed to save failed run:', err);
+      }
+      
+      // Log failed run to tool_runs
+      await logToolRun({
+        toolType: 'asin',
+        status: 'failed',
+        title: 'ASIN Check failed',
+        description: message,
+        totalCount: 0,
+        successCount: 0,
+        issueCount: 0,
+        // Remove the filename line or set to undefined
+        metadata: { 
+          error: message,
+          userEmail: currentUserEmail,
+          userId: currentUserId,
+        },
+      });
+      
       showFeedback('error', message);
     } finally {
       setIsChecking(false);
     }
   };
 
-  const handleClear = () => { setStylesInput(''); setAsinsInput(''); setConflicts([]); setLastRan(null); setStats(null); setFeedback(null); };
+  const handleClear = () => { 
+    setStylesInput(''); 
+    setAsinsInput(''); 
+    setConflicts([]); 
+    setLastRan(null); 
+    setStats(null); 
+    setFeedback(null); 
+  };
 
   const handleCopyResults = async () => {
     if (conflicts.length === 0) return;
@@ -243,7 +379,9 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
       const rows = conflicts.map(c => [c.style, ...c.asins]);
       await navigator.clipboard.writeText([headers, ...rows].map(r => r.join('\t')).join('\n'));
       showFeedback('success', 'Results copied to clipboard.');
-    } catch { showFeedback('error', 'Unable to copy results.'); }
+    } catch { 
+      showFeedback('error', 'Unable to copy results.'); 
+    }
   };
 
   const handleExportCSV = () => {
@@ -254,7 +392,9 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `asin-conflicts-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+    a.href = url; 
+    a.download = `asin-conflicts-${new Date().toISOString().split('T')[0]}.csv`; 
+    a.click();
     URL.revokeObjectURL(url);
     showFeedback('success', 'CSV exported.');
   };
@@ -284,7 +424,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
             </p>
           </div>
           <div className="flex gap-2">
-            {/* Keyboard shortcut hint */}
             <div className={`hidden items-center gap-1.5 rounded-lg border px-3 py-2 text-xs sm:flex ${
               isDark ? 'border-slate-700 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-50 text-gray-400'
             }`}>
@@ -318,7 +457,7 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
                 'Each row represents one Style-ASIN pair.',
                 'Press ⌘↵ or click Run Check to scan.',
                 'Duplicate ASINs for the same style are ignored.',
-                'Results are saved to Supabase activity logs.',
+                'Results are saved to activity logs for dashboard tracking.',
               ].map((tip, i) => (
                 <div key={tip} className={`flex items-start gap-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
                   <span className="font-bold text-emerald-500">{i + 1}.</span>
@@ -384,6 +523,10 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
             {lastRan && (
               <span className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
                 Last run: <span className="font-mono text-cyan-500">{lastRan.date} {lastRan.time}</span>
+                <span className="ml-2 inline-flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  by {lastRan.userEmail}
+                </span>
               </span>
             )}
           </div>

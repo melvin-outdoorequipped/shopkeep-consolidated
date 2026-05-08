@@ -36,7 +36,8 @@ export async function logToolRun(input: LogToolRunInput) {
       issue_count: input.issueCount ?? 0,
       filename: input.filename ?? null,
       metadata: input.metadata ?? {},
-      user_id: user.id, // Add this line
+      user_id: user.id,
+      user_email: user.email, // Add this line - saves user email directly
     });
 
     if (error) {

@@ -17,6 +17,10 @@ import {
   ShieldCheck,
   TrendingUp,
   Zap,
+  User,
+  Trophy,
+  Medal,
+  Crown,
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase/client';
@@ -36,6 +40,14 @@ interface ToolRun {
   issue_count: number;
   filename: string | null;
   created_at: string;
+  user_email?: string;
+}
+
+interface UserStats {
+  email: string;
+  totalRuns: number;
+  completedRuns: number;
+  lastRun: string;
 }
 
 interface ToolCardItem {
@@ -79,7 +91,7 @@ const operationTools: ToolCardItem[] = [
     title: 'Basecamp Response Generator',
     description:
       'Upload PO files and auto-generate formatted Basecamp messages for initial analysis, final analysis, pre-approval, or fixing updates.',
-    status: 'Active',
+    status: 'Beta',
     usage: 'Unlimited',
     accent: 'purple',
     icon: <MessageSquare className="h-4 w-4" />,
@@ -130,7 +142,6 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
       </defs>
       <polygon points={areaPoints} fill={`url(#grad-${color})`} />
       <polyline points={points} stroke={color} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      {/* Last dot */}
       <circle
         cx={(data.length - 1) * step}
         cy={h - (data[data.length - 1] / max) * (h - 4)}
@@ -138,34 +149,6 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
         fill={color}
       />
     </svg>
-  );
-}
-
-// --- Health Score Ring ---
-function HealthRing({ score, theme }: { score: number; theme: 'light' | 'dark' }) {
-  const r = 22, cx = 28, cy = 28;
-  const circumference = 2 * Math.PI * r;
-  const dash = (score / 100) * circumference;
-  const color = score >= 80 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444';
-  const label = score >= 80 ? 'Healthy' : score >= 50 ? 'Warning' : 'Critical';
-
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <svg width="56" height="56" viewBox="0 0 56 56">
-        <circle cx={cx} cy={cy} r={r} stroke={theme === 'dark' ? '#1e293b' : '#e5e7eb'} strokeWidth="4" fill="none" />
-        <circle
-          cx={cx} cy={cy} r={r}
-          stroke={color} strokeWidth="4" fill="none"
-          strokeDasharray={`${dash} ${circumference}`}
-          strokeLinecap="round"
-          transform="rotate(-90 28 28)"
-          style={{ transition: 'stroke-dasharray 1s cubic-bezier(0.4,0,0.2,1)' }}
-        />
-        <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle"
-          fill={color} fontSize="11" fontWeight="700">{score}%</text>
-      </svg>
-      <span className="text-[10px] font-semibold" style={{ color }}>{label}</span>
-    </div>
   );
 }
 
@@ -203,31 +186,61 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
   const isDark = theme === 'dark';
 
   const fetchDashboardData = async () => {
-    setIsLoading(true);
-    setErrorMessage('');
-    const { data, error } = await supabase
-      .from('tool_runs')
-      .select('id, tool_type, status, title, description, total_count, success_count, issue_count, filename, created_at')
-      .order('created_at', { ascending: false })
-      .limit(100);
+  setIsLoading(true);
+  setErrorMessage('');
+  
+  // Query tool_runs directly - use the user_email column that's now in the table
+  const { data, error } = await supabase
+    .from('tool_runs')
+    .select('id, tool_type, status, title, description, total_count, success_count, issue_count, filename, created_at, user_email')
+    .order('created_at', { ascending: false })
+    .limit(200);
 
-    if (error) {
-      setRuns([]);
-      setErrorMessage(error.message);
-    } else {
-      setRuns((data ?? []) as ToolRun[]);
-      setLastRefreshed(new Date());
-    }
-    setIsLoading(false);
-  };
+  if (error) {
+    setRuns([]);
+    setErrorMessage(error.message);
+  } else {
+    // Simply use the data as is - user_email is already there
+    setRuns((data ?? []) as ToolRun[]);
+    setLastRefreshed(new Date());
+  }
+  setIsLoading(false);
+};
 
   useEffect(() => { fetchDashboardData(); }, []);
 
-  // Auto-refresh every 60s
   useEffect(() => {
     const interval = setInterval(fetchDashboardData, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Calculate top users
+  const topUsers = useMemo(() => {
+    const userMap = new Map<string, UserStats>();
+    
+    runs.forEach(run => {
+      const email = run.user_email || 'System';
+      if (!userMap.has(email)) {
+        userMap.set(email, {
+          email,
+          totalRuns: 0,
+          completedRuns: 0,
+          lastRun: run.created_at,
+        });
+      }
+      
+      const stats = userMap.get(email)!;
+      stats.totalRuns++;
+      if (run.status === 'completed') stats.completedRuns++;
+      if (new Date(run.created_at) > new Date(stats.lastRun)) {
+        stats.lastRun = run.created_at;
+      }
+    });
+    
+    return Array.from(userMap.values())
+      .sort((a, b) => b.totalRuns - a.totalRuns)
+      .slice(0, 5);
+  }, [runs]);
 
   const metrics = useMemo(() => {
     const totalRuns = runs.length;
@@ -242,20 +255,16 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
     const totalIssues = runs.reduce((s, r) => s + Number(r.issue_count ?? 0), 0);
     const completionRate = totalRuns > 0 ? Math.round((completedRuns / totalRuns) * 100) : 0;
     const successRate = totalProcessed > 0 ? Math.round((totalSuccess / totalProcessed) * 100) : 0;
-    const healthScore = totalRuns > 0
-      ? Math.round(((completedRuns * 1 + warningRuns * 0.5) / totalRuns) * 100)
-      : 100;
 
     return {
       totalRuns, completedRuns, warningRuns, failedRuns,
       skuRuns, asinRuns, basecampRuns,
       totalProcessed, totalSuccess, totalIssues,
-      completionRate, successRate, healthScore,
+      completionRate, successRate,
       activeTools: operationTools.filter(t => !t.comingSoon).length,
     };
   }, [runs]);
 
-  // Sparkline data: runs per tool per day for last 7 days
   const sparklineData = useMemo(() => {
     const days = 7;
     const now = Date.now();
@@ -302,6 +311,16 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
     basecamp: 'Basecamp',
   };
 
+  // Get rank icon
+  const getRankIcon = (index: number) => {
+    switch(index) {
+      case 0: return <Crown className="h-4 w-4 text-yellow-500" />;
+      case 1: return <Medal className="h-4 w-4 text-gray-400" />;
+      case 2: return <Medal className="h-4 w-4 text-amber-600" />;
+      default: return <Trophy className="h-4 w-4 text-slate-500" />;
+    }
+  };
+
   return (
     <div className="w-full max-w-full space-y-6 overflow-hidden sm:space-y-8">
 
@@ -312,7 +331,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
             <h1 className={`break-words text-xl font-bold sm:text-2xl ${pageText}`}>
               OPERATION TOOLS
             </h1>
-            {/* Live indicator */}
             <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               LIVE
@@ -344,16 +362,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
               : <RefreshCw className="h-4 w-4" />}
             Refresh
           </button>
-          <button
-            type="button"
-            className={`w-full rounded-lg px-4 py-2 text-sm font-semibold transition-colors sm:w-auto ${
-              isDark
-                ? 'bg-cyan-900/60 text-cyan-100 hover:bg-cyan-800'
-                : 'bg-cyan-100 text-cyan-800 hover:bg-cyan-200'
-            }`}
-          >
-            Feedback
-          </button>
         </div>
       </section>
 
@@ -364,46 +372,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
           Dashboard error: {errorMessage}
         </div>
       )}
-
-      {/* ── Top Row: Health Score + Quick Stats ── */}
-      <section className={`rounded-2xl border p-4 shadow-lg sm:p-5 ${panelClass}`}>
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          {/* Health */}
-          <div className="flex items-center gap-5">
-            <HealthRing score={metrics.healthScore} theme={theme} />
-            <div>
-              <p className={`text-xs font-semibold uppercase tracking-widest ${mutedText}`}>System Health</p>
-              <p className={`mt-0.5 text-base font-bold ${pageText}`}>
-                {metrics.completedRuns} completed &nbsp;·&nbsp;
-                <span className="text-yellow-400">{metrics.warningRuns} warnings</span>
-                &nbsp;·&nbsp;
-                <span className="text-red-400">{metrics.failedRuns} failed</span>
-              </p>
-              <p className={`mt-1 text-xs ${mutedText}`}>Based on last {metrics.totalRuns} recorded runs</p>
-            </div>
-          </div>
-
-          {/* Quick stat pills */}
-          <div className="flex flex-wrap gap-2">
-            {[
-              { label: 'Completion', value: `${metrics.completionRate}%`, color: 'emerald' },
-              { label: 'Success Rate', value: `${metrics.successRate}%`, color: 'cyan' },
-              { label: 'Items Processed', value: metrics.totalProcessed.toLocaleString(), color: 'blue' },
-            ].map(pill => (
-              <div key={pill.label}
-                className={`rounded-xl border px-3 py-2 text-center ${
-                  isDark ? 'border-slate-700/60 bg-slate-800/60' : 'border-gray-200 bg-gray-50'
-                }`}>
-                <p className={`text-[11px] font-medium ${mutedText}`}>{pill.label}</p>
-                <p className={`mt-0.5 text-lg font-bold ${
-                  pill.color === 'emerald' ? 'text-emerald-400' :
-                  pill.color === 'cyan' ? 'text-cyan-400' : 'text-blue-400'
-                }`}>{pill.value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* ── Tool Cards ── */}
       <section className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -431,6 +399,72 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
           helper={`${metrics.completedRuns} completed runs`} icon={<CheckCircle2 className="h-5 w-5" />} tone="blue" />
       </section>
 
+      {/* ── Top Users Section ── */}
+      <section className={`rounded-2xl border p-4 shadow-lg sm:p-5 ${panelClass}`}>
+        <div className="flex items-center gap-2 mb-4">
+          <Trophy className="h-5 w-5 flex-shrink-0 text-yellow-500" />
+          <div>
+            <h2 className={`text-base font-semibold ${pageText}`}>Top Users</h2>
+            <p className={`text-xs ${mutedText}`}>Most active team members</p>
+          </div>
+        </div>
+
+        {topUsers.length === 0 ? (
+          <div className={`py-8 text-center text-sm ${mutedText}`}>No user data available yet</div>
+        ) : (
+          <div className="space-y-3">
+            {topUsers.map((user, index) => {
+              const maxRuns = topUsers[0]?.totalRuns || 1;
+              const percentage = (user.totalRuns / maxRuns) * 100;
+              
+              return (
+                <div key={user.email} className="group">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="flex-shrink-0 w-7">
+                      {getRankIcon(index)}
+                    </div>
+                    <div className="flex-shrink-0">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-xs font-semibold text-emerald-400">
+                        {user.email[0]?.toUpperCase() || 'U'}
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className={`truncate text-sm font-semibold ${pageText}`}>
+                          {user.email}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-bold tabular-nums text-emerald-400`}>
+                            {user.totalRuns}
+                          </span>
+                          <span className={`text-[10px] ${mutedText}`}>runs</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <div className="flex-1">
+                          <div className={`h-1.5 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
+                            <div
+                              className="h-full rounded-full bg-emerald-500 transition-all duration-700"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                        <span className={`text-[10px] ${mutedText}`}>
+                          Completed: {user.completedRuns}
+                        </span>
+                      </div>
+                      <p className={`text-[10px] ${mutedText} mt-1`}>
+                        Last run: {relativeTime(user.lastRun)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       {/* ── Bottom Row: Usage Summary + Recent Activity ── */}
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-5">
 
@@ -449,7 +483,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
             <UsageLine theme={theme} label="Basecamp Generator" value={metrics.basecampRuns} maxValue={maxToolRuns} color="violet" />
           </div>
 
-          {/* Trend summary */}
           <div className={`mt-5 rounded-xl border px-3 py-2.5 text-xs ${
             isDark ? 'border-slate-700/40 bg-slate-800/50' : 'border-gray-100 bg-gray-50'
           }`}>
@@ -460,7 +493,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
           </div>
         </div>
 
-        {/* Recent runs — 3 cols */}
+        {/* Recent runs — 3 cols with User Email */}
         <div className={`rounded-2xl border p-4 shadow-lg sm:p-5 lg:col-span-3 ${panelClass}`}>
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -497,10 +530,18 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
 
                   <div className="min-w-0 flex-1">
                     <p className={`truncate text-sm font-semibold ${pageText}`}>{run.title}</p>
-                    <p className={`truncate text-xs ${mutedText}`}>
-                      {toolLabel[run.tool_type] ?? run.tool_type}
-                      {run.total_count > 0 && ` · ${run.total_count.toLocaleString()} items`}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className={`truncate text-xs ${mutedText}`}>
+                        {toolLabel[run.tool_type] ?? run.tool_type}
+                        {run.total_count > 0 && ` · ${run.total_count.toLocaleString()} items`}
+                      </p>
+                    </div>
+                    {run.user_email && run.user_email !== 'System' && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <User className="h-2.5 w-2.5 text-emerald-400" />
+                        <span className={`text-[10px] ${mutedText}`}>{run.user_email}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-shrink-0 flex-col items-end gap-0.5">
@@ -582,7 +623,6 @@ function ToolCard({
         ${accentConfig.card}
         ${tool.comingSoon ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
     >
-      {/* Top row */}
       <div className="flex items-start justify-between gap-2">
         <div className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[11px] font-bold ${
           isDark ? 'bg-slate-900/50 text-slate-300' : 'bg-white/70 text-gray-600'
@@ -590,13 +630,11 @@ function ToolCard({
           <span className="flex-shrink-0">{tool.icon}</span>
           <span className="truncate">{tool.category}</span>
         </div>
-        {/* Sparkline */}
         <div className="flex-shrink-0 pt-0.5">
           <Sparkline data={sparkline} color={accentConfig.spark} />
         </div>
       </div>
 
-      {/* Title + desc */}
       <div className="mt-3 min-w-0 flex-1">
         <h3 className={`break-words text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
           {tool.title}
@@ -606,7 +644,6 @@ function ToolCard({
         </p>
       </div>
 
-      {/* Footer row */}
       <div className="mt-5 flex items-end justify-between gap-3">
         <div>
           <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${statusBadge}`}>
