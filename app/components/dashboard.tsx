@@ -186,26 +186,24 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
   const isDark = theme === 'dark';
 
   const fetchDashboardData = async () => {
-  setIsLoading(true);
-  setErrorMessage('');
-  
-  // Query tool_runs directly - use the user_email column that's now in the table
-  const { data, error } = await supabase
-    .from('tool_runs')
-    .select('id, tool_type, status, title, description, total_count, success_count, issue_count, filename, created_at, user_email')
-    .order('created_at', { ascending: false })
-    .limit(200);
+    setIsLoading(true);
+    setErrorMessage('');
+    
+    const { data, error } = await supabase
+      .from('tool_runs')
+      .select('id, tool_type, status, title, description, total_count, success_count, issue_count, filename, created_at, user_email')
+      .order('created_at', { ascending: false })
+      .limit(200);
 
-  if (error) {
-    setRuns([]);
-    setErrorMessage(error.message);
-  } else {
-    // Simply use the data as is - user_email is already there
-    setRuns((data ?? []) as ToolRun[]);
-    setLastRefreshed(new Date());
-  }
-  setIsLoading(false);
-};
+    if (error) {
+      setRuns([]);
+      setErrorMessage(error.message);
+    } else {
+      setRuns((data ?? []) as ToolRun[]);
+      setLastRefreshed(new Date());
+    }
+    setIsLoading(false);
+  };
 
   useEffect(() => { fetchDashboardData(); }, []);
 
@@ -285,7 +283,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
     };
   }, [runs]);
 
-  const recentRuns = useMemo(() => runs.slice(0, 8), [runs]);
+  const recentRuns = useMemo(() => runs.slice(0, 12), [runs]);
 
   const navigateToTool = (toolId: 'sku' | 'asin' | 'basecamp') => {
     window.dispatchEvent(new CustomEvent('navigateToTool', { detail: { toolId } }));
@@ -399,63 +397,153 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
           helper={`${metrics.completedRuns} completed runs`} icon={<CheckCircle2 className="h-5 w-5" />} tone="blue" />
       </section>
 
-      {/* ── Top Users Section ── */}
+            {/* ── Top Users Section ── */}
       <section className={`rounded-2xl border p-4 shadow-lg sm:p-5 ${panelClass}`}>
-        <div className="flex items-center gap-2 mb-4">
-          <Trophy className="h-5 w-5 flex-shrink-0 text-yellow-500" />
-          <div>
-            <h2 className={`text-base font-semibold ${pageText}`}>Top Users</h2>
-            <p className={`text-xs ${mutedText}`}>Most active team members</p>
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <div className="rounded-full bg-yellow-500/20 p-2">
+              <Trophy className="h-5 w-5 text-yellow-500" />
+            </div>
+            <div>
+              <h2 className={`text-base font-semibold ${pageText}`}>Top Users</h2>
+              <p className={`text-xs ${mutedText}`}>Most active team members</p>
+            </div>
+          </div>
+          <div className={`text-xs ${mutedText}`}>
+            Total {topUsers.reduce((sum, u) => sum + u.totalRuns, 0)} runs
           </div>
         </div>
 
         {topUsers.length === 0 ? (
-          <div className={`py-8 text-center text-sm ${mutedText}`}>No user data available yet</div>
+          <div className={`py-12 text-center text-sm ${mutedText}`}>
+            <User className="mx-auto h-10 w-10 opacity-30 mb-2" />
+            No user data available yet
+          </div>
         ) : (
           <div className="space-y-3">
             {topUsers.map((user, index) => {
               const maxRuns = topUsers[0]?.totalRuns || 1;
               const percentage = (user.totalRuns / maxRuns) * 100;
+              const successRate = user.totalRuns > 0 ? Math.round((user.completedRuns / user.totalRuns) * 100) : 0;
               
               return (
-                <div key={user.email} className="group">
-                  <div className="flex items-center gap-3 mb-1">
-                    <div className="flex-shrink-0 w-7">
-                      {getRankIcon(index)}
+                <div
+                  key={user.email}
+                  className={`group relative rounded-xl border transition-all duration-200 ${
+                    index === 0 
+                      ? isDark 
+                        ? 'border-yellow-500/30 bg-gradient-to-r from-yellow-500/5 to-transparent' 
+                        : 'border-yellow-400/50 bg-gradient-to-r from-yellow-100/30 to-transparent'
+                      : isDark 
+                        ? 'border-slate-700/50 hover:border-slate-600' 
+                        : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  {/* Rank Badge */}
+                  <div className="absolute -left-2 -top-2">
+                    <div className={`
+                      flex h-7 w-7 items-center justify-center rounded-full shadow-lg
+                      ${index === 0 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' : ''}
+                      ${index === 1 ? 'bg-gradient-to-br from-gray-400 to-gray-500' : ''}
+                      ${index === 2 ? 'bg-gradient-to-br from-amber-600 to-amber-700' : ''}
+                      ${index >= 3 ? (isDark ? 'bg-slate-700' : 'bg-gray-400') : ''}
+                    `}>
+                      {index === 0 && <Crown className="h-4 w-4 text-white" />}
+                      {index === 1 && <Medal className="h-4 w-4 text-white" />}
+                      {index === 2 && <Medal className="h-4 w-4 text-white" />}
+                      {index >= 3 && <span className="text-xs font-bold text-white">{index + 1}</span>}
                     </div>
-                    <div className="flex-shrink-0">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-xs font-semibold text-emerald-400">
-                        {user.email[0]?.toUpperCase() || 'U'}
-                      </div>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className={`truncate text-sm font-semibold ${pageText}`}>
-                          {user.email}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-sm font-bold tabular-nums text-emerald-400`}>
-                            {user.totalRuns}
-                          </span>
-                          <span className={`text-[10px] ${mutedText}`}>runs</span>
+                  </div>
+
+                  <div className="p-4 pl-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      {/* User Info */}
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="relative">
+                          <div className={`
+                            flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-base font-bold shadow-md
+                            ${index === 0 ? 'bg-gradient-to-br from-yellow-500 to-yellow-600 text-white' : ''}
+                            ${index === 1 ? 'bg-gradient-to-br from-gray-500 to-gray-600 text-white' : ''}
+                            ${index === 2 ? 'bg-gradient-to-br from-amber-600 to-amber-700 text-white' : ''}
+                            ${index >= 3 ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : ''}
+                          `}>
+                            {user.email[0]?.toUpperCase() || 'U'}
+                          </div>
+                          {index === 0 && (
+                            <div className="absolute -right-1 -top-1">
+                              <div className="h-3 w-3 rounded-full bg-yellow-400 animate-pulse" />
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-2 mt-0.5">
-                        <div className="flex-1">
-                          <div className={`h-1.5 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
-                            <div
-                              className="h-full rounded-full bg-emerald-500 transition-all duration-700"
-                              style={{ width: `${percentage}%` }}
-                            />
+                        
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className={`truncate text-sm font-semibold ${pageText}`}>
+                              {user.email}
+                            </p>
+                            {index === 0 && (
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                isDark ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                <Crown className="h-3 w-3" />
+                                Top Contributor
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                            <div className="flex items-center gap-1">
+                              <div className={`h-1.5 w-1.5 rounded-full ${isDark ? 'bg-emerald-400' : 'bg-emerald-500'}`} />
+                              <span className={`text-xs ${mutedText}`}>
+                                Success Rate: <span className={`font-semibold ${pageText}`}>{successRate}%</span>
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-slate-500" />
+                              <span className={`text-xs ${mutedText}`}>
+                                Last run: {relativeTime(user.lastRun)}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                        <span className={`text-[10px] ${mutedText}`}>
-                          Completed: {user.completedRuns}
-                        </span>
                       </div>
-                      <p className={`text-[10px] ${mutedText} mt-1`}>
-                        Last run: {relativeTime(user.lastRun)}
-                      </p>
+
+                      {/* Stats Badges */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className={`rounded-lg border px-3 py-1.5 text-center min-w-[70px] ${
+                          isDark ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'
+                        }`}>
+                          <p className={`text-[10px] font-medium uppercase ${mutedText}`}>Total Runs</p>
+                          <p className={`text-lg font-bold tabular-nums ${
+                            index === 0 ? 'text-yellow-400' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-amber-500' : 'text-emerald-400'
+                          }`}>
+                            {user.totalRuns}
+                          </p>
+                        </div>
+                        <div className={`rounded-lg border px-3 py-1.5 text-center min-w-[70px] ${
+                          isDark ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'
+                        }`}>
+                          <p className={`text-[10px] font-medium uppercase ${mutedText}`}>Completed</p>
+                          <p className={`text-lg font-bold tabular-nums text-emerald-400`}>
+                            {user.completedRuns}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-[11px] mb-1">
+                        <span className={mutedText}>Activity level vs top user</span>
+                        <span className={`font-semibold tabular-nums ${pageText}`}>{Math.round(percentage)}%</span>
+                      </div>
+                      <div className={`h-2 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${
+                            index === 0 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -493,76 +581,83 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
           </div>
         </div>
 
-        {/* Recent runs — 3 cols with User Email */}
-        <div className={`rounded-2xl border p-4 shadow-lg sm:p-5 lg:col-span-3 ${panelClass}`}>
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Flame className="h-5 w-5 flex-shrink-0 text-orange-400" />
-              <div>
-                <h2 className={`text-base font-semibold ${pageText}`}>Recent Activity</h2>
-                <p className={`text-xs ${mutedText}`}>Latest tool runs</p>
+        {/* Recent runs — 3 cols with User Email - Fixed height with scroll */}
+        <div className={`rounded-2xl border shadow-lg lg:col-span-3 ${panelClass}`}>
+          <div className={`border-b px-4 py-3 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Flame className="h-5 w-5 flex-shrink-0 text-orange-400" />
+                <div>
+                  <h2 className={`text-base font-semibold ${pageText}`}>Recent Activity</h2>
+                  <p className={`text-xs ${mutedText}`}>Latest tool runs</p>
+                </div>
               </div>
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'
+              }`}>
+                {recentRuns.length} shown
+              </span>
             </div>
-            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-              isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'
-            }`}>
-              {recentRuns.length} shown
-            </span>
           </div>
 
-          {isLoading ? (
-            <div className="flex items-center justify-center py-10">
-              <Loader2 className={`h-6 w-6 animate-spin ${mutedText}`} />
-            </div>
-          ) : recentRuns.length === 0 ? (
-            <div className={`py-10 text-center text-sm ${mutedText}`}>No activity yet</div>
-          ) : (
-            <div className="space-y-1 overflow-hidden">
-              {recentRuns.map((run, i) => (
-                <div
-                  key={run.id}
-                  className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
-                    isDark ? 'hover:bg-slate-800/60' : 'hover:bg-gray-50'
-                  }`}
-                  style={{ animationDelay: `${i * 40}ms` }}
-                >
-                  <StatusDot status={run.status} />
+          {/* Fixed height container with scroll */}
+          <div className="h-[400px] overflow-y-auto">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className={`h-6 w-6 animate-spin ${mutedText}`} />
+              </div>
+            ) : recentRuns.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className={`text-center text-sm ${mutedText}`}>No activity yet</div>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-700/50">
+                {recentRuns.map((run, i) => (
+                  <div
+                    key={run.id}
+                    className={`group flex items-center gap-3 px-4 py-3 transition-colors ${
+                      isDark ? 'hover:bg-slate-800/60' : 'hover:bg-gray-50'
+                    }`}
+                    style={{ animationDelay: `${i * 40}ms` }}
+                  >
+                    <StatusDot status={run.status} />
 
-                  <div className="min-w-0 flex-1">
-                    <p className={`truncate text-sm font-semibold ${pageText}`}>{run.title}</p>
-                    <div className="flex items-center gap-2">
-                      <p className={`truncate text-xs ${mutedText}`}>
-                        {toolLabel[run.tool_type] ?? run.tool_type}
-                        {run.total_count > 0 && ` · ${run.total_count.toLocaleString()} items`}
-                      </p>
-                    </div>
-                    {run.user_email && run.user_email !== 'System' && (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <User className="h-2.5 w-2.5 text-emerald-400" />
-                        <span className={`text-[10px] ${mutedText}`}>{run.user_email}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className={`truncate text-sm font-semibold ${pageText}`}>{run.title}</p>
+                      <div className="flex items-center gap-2">
+                        <p className={`truncate text-xs ${mutedText}`}>
+                          {toolLabel[run.tool_type] ?? run.tool_type}
+                          {run.total_count > 0 && ` · ${run.total_count.toLocaleString()} items`}
+                        </p>
                       </div>
-                    )}
-                  </div>
+                      {run.user_email && run.user_email !== 'System' && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <User className="h-2.5 w-2.5 text-emerald-400" />
+                          <span className={`text-[10px] ${mutedText}`}>{run.user_email}</span>
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="flex flex-shrink-0 flex-col items-end gap-0.5">
-                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
-                      run.status === 'completed'
-                        ? isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
-                        : run.status === 'warning'
-                          ? isDark ? 'bg-yellow-500/15 text-yellow-400' : 'bg-yellow-100 text-yellow-700'
-                          : isDark ? 'bg-red-500/15 text-red-400' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {run.status}
-                    </span>
-                    <span className={`flex items-center gap-0.5 text-[10px] ${mutedText}`}>
-                      <Clock className="h-3 w-3" />
-                      {relativeTime(run.created_at)}
-                    </span>
+                    <div className="flex flex-shrink-0 flex-col items-end gap-0.5">
+                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                        run.status === 'completed'
+                          ? isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                          : run.status === 'warning'
+                            ? isDark ? 'bg-yellow-500/15 text-yellow-400' : 'bg-yellow-100 text-yellow-700'
+                            : isDark ? 'bg-red-500/15 text-red-400' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {run.status}
+                      </span>
+                      <span className={`flex items-center gap-0.5 text-[10px] ${mutedText}`}>
+                        <Clock className="h-3 w-3" />
+                        {relativeTime(run.created_at)}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
     </div>
