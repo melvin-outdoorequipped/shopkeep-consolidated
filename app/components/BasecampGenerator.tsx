@@ -148,13 +148,17 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
   };
 
   const parseWithRemarks = (fileData?: POFileData) => {
-    if (!fileData?.rows || fileData.rows.length <= 1) return { totalSkus: 0, totalQty: 0, issuesMap: {} as Record<string, { skus: number; qty: number }> };
+    if (!fileData?.rows || fileData.rows.length <= 1) return { totalSkus: 0, totalQty: 0, issuesMap: {} as Record<string, { skus: number; qty: number }>, hasRemarksColumn: false };
+    
     const headers = fileData.rows[0].map(h => String(h || '').toLowerCase().trim());
     const skuIdx = headers.findIndex(h => h === 'sku') !== -1 ? headers.findIndex(h => h === 'sku') : 0;
     const qtyIdx = headers.findIndex(h => h === 'qty' || h === 'order') !== -1 ? headers.findIndex(h => h === 'qty' || h === 'order') : 6;
-    const remIdx = headers.findIndex(h => h === 'remarks');
+    const remIdx = headers.findIndex(h => h === 'remarks' || h === 'remark');
+    const hasRemarksColumn = remIdx !== -1;
+    
     let totalSkus = 0, totalQty = 0;
     const issuesMap: Record<string, { skus: number; qty: number }> = {};
+    
     for (let i = 1; i < fileData.rows.length; i++) {
       const row = fileData.rows[i];
       if (row?.length > Math.max(skuIdx, qtyIdx)) {
@@ -163,17 +167,20 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
           totalSkus++;
           const qty = parseInt(row[qtyIdx]?.toString(), 10) || 0;
           totalQty += qty;
-          let cat = 'Standalone';
-          if (remIdx !== -1 && row[remIdx]) {
+          
+          // Only process remarks if the column exists and has content
+          if (hasRemarksColumn && remIdx !== -1 && row[remIdx]) {
             const rem = row[remIdx].toString().trim();
-            if (rem && rem !== '#N/A' && !rem.startsWith('=')) cat = rem;
+            if (rem && rem !== '#N/A' && !rem.startsWith('=') && rem !== 'Good to Order' && rem !== 'Good') {
+              if (!issuesMap[rem]) issuesMap[rem] = { skus: 0, qty: 0 };
+              issuesMap[rem].skus++; 
+              issuesMap[rem].qty += qty;
+            }
           }
-          if (!issuesMap[cat]) issuesMap[cat] = { skus: 0, qty: 0 };
-          issuesMap[cat].skus++; issuesMap[cat].qty += qty;
         }
       }
     }
-    return { totalSkus, totalQty, issuesMap };
+    return { totalSkus, totalQty, issuesMap, hasRemarksColumn };
   };
 
   const saveBasecampGeneration = async ({ message, stats, status, errorMessage }: { message: string | null; stats: GenerationStats; status: 'completed' | 'failed'; errorMessage?: string | null }) => {
@@ -202,39 +209,88 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
 
       if (analysisType === 'initial') {
         const { totalSkus, totalQty, issuesMap } = parseForInitial(uploadedFiles.listingData);
+        const hasIssues = Object.keys(issuesMap).length > 0;
+        
         stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+        
         message = `Hi Ms, kindly see the initial analysis for this PO#: ${poPrefix}. Thank you!\n`;
-        message += `Total No. of SKUs in Order: ${totalSkus} | QTY: ${totalQty} (Good to Order)\n\n`;
-        Object.entries(issuesMap).forEach(([note, data]) => { message += ` | ${note}: ${data.skus} | QTY: ${data.qty}\n`; });
+        message += `Total No. of SKUs in Order: ${totalSkus} | QTY: ${totalQty} (Good to Order)\n`;
+        
+        if (hasIssues) {
+          message += `\n`;
+          Object.entries(issuesMap).forEach(([note, data]) => {
+            message += ` | ${note}: ${data.skus} | QTY: ${data.qty}\n`;
+          });
+        }
+        
         if (doneTracker) message += `\n✅Done updating the tracker\n`;
+        
       } else if (analysisType === 'final') {
         const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.listingData);
+        const hasIssues = Object.keys(issuesMap).length > 0;
+        
         stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+        
         message = `Hi Ms, kindly see the Listing Data and Excluded file for this PO#: ${poPrefix}. Thank you!\n`;
         message += `Total No. of SKUs in Order: ${totalSkus} | QTY: ${totalQty} (Good to Order)\n`;
+        
         if (uploadedFiles.excluded) {
           const { totalSkus: exSkus, totalQty: exQty } = parseWithRemarks(uploadedFiles.excluded);
-          if (exSkus > 0) message += `Total No. of Excluded SKUs in Order: ${exSkus} | QTY: ${exQty}\n`;
+          if (exSkus > 0) {
+            message += `Total No. of Excluded SKUs: ${exSkus} | QTY: ${exQty}\n`;
+          }
         }
-        message += '\n';
-        Object.entries(issuesMap).forEach(([remark, data]) => { message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`; });
+        
+        // Only add breakdown if there are actual issues
+        if (hasIssues) {
+          message += `\n`;
+          Object.entries(issuesMap).forEach(([remark, data]) => {
+            message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
+          });
+        } else {
+          // No issues, skip the breakdown line
+          message += ``;
+        }
+        
         message += shippingPlanError === 'yes' ? `\nShipping Plan Error\n` : `\nNo error in shipping plan creation\n`;
         if (doneTracker) message += `✅Done updating the tracker\n`;
         if (doneFbaErrorTracker) message += `✅Done adding to FBA ASIN Errors Encountered tracker\n`;
         if (doneTrackerSubmission) message += `✅Added to Thorogood - Amazon Deliverables Tracker & Form Submission:\n`;
         if (suggest3PL === 'yes') message += `Note: Please see the remarks column for items suggested for 3PL.\n`;
+        
       } else if (analysisType === 'pre-approval') {
-        const { totalSkus, totalQty } = parseWithRemarks(uploadedFiles.preApproval);
-        stats = { totalSkus, totalQty, issueCount: 0 };
-        message = `Hi, please see the attached Pre-Approval file for these items to see if it is good to order or exclude. Thank you!\n`;
-        message += `Total No. of SKUs for Pre-Approval: ${totalSkus} | QTY: ${totalQty}\n\n`;
-        message += ` | Standalone: ${totalSkus} | QTY: ${totalQty}\n`;
-      } else {
-        const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.listingData || uploadedFiles.preApproval);
+        const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.preApproval);
+        const hasIssues = Object.keys(issuesMap).length > 0;
+        
         stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+        
+        message = `Hi, please see the attached Pre-Approval file for these items to see if it is good to order or exclude. Thank you!\n`;
+        message += `Total No. of SKUs for Pre-Approval: ${totalSkus} | QTY: ${totalQty}\n`;
+        
+        if (hasIssues) {
+          message += `\n`;
+          Object.entries(issuesMap).forEach(([remark, data]) => {
+            message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
+          });
+        }
+        
+      } else {
+        // for-fixing
+        const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.listingData || uploadedFiles.preApproval);
+        const hasIssues = Object.keys(issuesMap).length > 0;
+        
+        stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+        
         message = `Hi Ms, forwarding this file for fixing. Thank you!\n`;
-        message += `Total No. of SKUs For Fixing in Order: ${totalSkus} | QTY: ${totalQty}\n\n`;
-        Object.entries(issuesMap).forEach(([remark, data]) => { message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`; });
+        message += `Total No. of SKUs For Fixing in Order: ${totalSkus} | QTY: ${totalQty}\n`;
+        
+        if (hasIssues) {
+          message += `\n`;
+          Object.entries(issuesMap).forEach(([remark, data]) => {
+            message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
+          });
+        }
+        
         if (doneTracker) message += `\n✅Done updating the tracker\n`;
       }
 
@@ -282,7 +338,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         <div className={`min-w-0 rounded-2xl border p-4 shadow-lg sm:p-6 ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
           <div className="mb-5 flex items-center justify-between">
             <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Configuration</h2>
-            {/* Active type pill */}
             <span className={`rounded-full border px-3 py-1 text-xs font-bold ${
               isDark ? `border ${typeConfig.darkBg.split(' ')[1]} bg-transparent ${typeConfig.darkText}` : `border ${typeConfig.lightBg.split(' ')[1]} bg-transparent ${typeConfig.lightText}`
             }`}>
@@ -442,7 +497,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Message stats */}
               {generatedMessage && generatedStats && (
                 <div className="flex items-center gap-3 text-xs">
                   <span className={`flex items-center gap-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
@@ -469,7 +523,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
           <div className={`min-h-[360px] rounded-xl border sm:min-h-[420px] ${isDark ? 'border-slate-700 bg-slate-950/50' : 'border-gray-200 bg-gray-50'}`}>
             {generatedMessage ? (
               <div className={`rounded-xl border p-4 h-full ${isDark ? typeConfig.darkBg : typeConfig.lightBg}`}>
-                {/* Message type header bar */}
                 <div className={`mb-3 flex items-center gap-2 border-b pb-3 ${isDark ? 'border-white/10' : 'border-black/10'}`}>
                   <MessageSquare className={`h-4 w-4 ${isDark ? typeConfig.darkText : typeConfig.lightText}`} />
                   <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? typeConfig.darkText : typeConfig.lightText}`}>

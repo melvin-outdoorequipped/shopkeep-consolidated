@@ -101,7 +101,7 @@ const teamMembers = [
   {
     name: 'Juddy',
     role: 'Data Analyst',
-    image: '/images/juddy.jpg',
+    image: '/images/juddy.png',
     email: 'juddy@outdoorequipped.com',
   },
   {
@@ -141,9 +141,9 @@ const teamImages: Record<string, string> = {
   'arlie':'/images/arlie.png',
   'melvin@outdoorequipped.com': '/images/Melvin.png',
   'melvin': '/images/Melvin.png',
-  'janroe': '/images/janroe.png',
+  'jbermoy': '/images/janroe.png',
   'jerald': '/images/jerald.png',
-  'juddy': '/images/juddy.jpg',
+  'juddy': '/images/juddy.png',
   'spuebla': '/images/shenna.png',
   'wjdelcorro': '/images/wyndell.png',
   'jonisa': '/images/jonisa.png',

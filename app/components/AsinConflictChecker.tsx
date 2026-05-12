@@ -115,17 +115,21 @@ function findConflicts(pairs: StyleAsinPair[]): Conflict[] {
 // Line number gutter component
 function LineGutter({ text, isDark }: { text: string; isDark: boolean }) {
   const lines = text ? splitLines(text) : [];
-  const count = Math.max(lines.length, 1);
+  const count = Math.max(lines.length, 20);
 
   return (
     <div
-      className={`hidden select-none px-2 py-4 text-right font-mono text-[11px] leading-[1.625rem] md:flex md:flex-col ${
-        isDark ? 'text-slate-700 bg-slate-900/40' : 'text-gray-300 bg-gray-50'
+      className={`flex flex-col select-none px-2 py-4 text-right font-mono text-[11px] border-r shrink-0 ${
+        isDark ? 'text-slate-700 bg-slate-900/40 border-slate-800' : 'text-gray-300 bg-gray-50 border-gray-200'
       }`}
-      style={{ minWidth: '2.2rem' }}
+      style={{ 
+        minWidth: '3.5rem', 
+        /* This must match the textarea lineHeight exactly */
+        lineHeight: '1.625rem' 
+      }}
     >
       {Array.from({ length: count }, (_, i) => (
-        <span key={i}>{i + 1}</span>
+        <span key={i} className="h-[1.625rem]">{i + 1}</span>
       ))}
     </div>
   );
@@ -250,7 +254,7 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         userEmail: currentUserEmail || 'System',
       });
 
-      // Save to asin_checks table with user info (handle gracefully)
+      // Save to asin_checks table with user info
       try {
         const insertData: any = {
           total_rows: totalRows,
@@ -262,25 +266,14 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
           created_at: new Date().toISOString(),
         };
         
-        // Only add user_id and user_email if they exist
-        if (currentUserId) {
-          insertData.user_id = currentUserId;
-        }
-        if (currentUserEmail) {
-          insertData.user_email = currentUserEmail;
-        }
+        if (currentUserId) insertData.user_id = currentUserId;
+        if (currentUserEmail) insertData.user_email = currentUserEmail;
         
-        const { error: asinError } = await supabase.from('asin_checks').insert(insertData);
-        
-        if (asinError) {
-          console.error('Error saving to asin_checks:', asinError);
-          // Don't throw - this is non-critical for the user experience
-        }
+        await supabase.from('asin_checks').insert(insertData);
       } catch (err) {
         console.error('Failed to save to asin_checks:', err);
       }
 
-      // Log to tool_runs for dashboard (this powers Top Users and Recent Activity)
       await logToolRun({
         toolType: 'asin',
         status: conflictCount > 0 ? 'warning' : 'completed',
@@ -293,7 +286,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         totalCount: pairs.length,
         successCount: pairs.length - conflictCount,
         issueCount: conflictCount,
-        // Remove the filename line or set to undefined
         metadata: {
           totalRows,
           validPairs: pairs.length,
@@ -315,7 +307,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
     } catch (error) {
       const message = error instanceof Error ? error.message : 'ASIN check failed.';
       
-      // Save failed run to asin_checks (handle gracefully)
       try {
         const insertData: any = {
           total_rows: 0,
@@ -328,19 +319,14 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
           created_at: new Date().toISOString(),
         };
         
-        if (currentUserId) {
-          insertData.user_id = currentUserId;
-        }
-        if (currentUserEmail) {
-          insertData.user_email = currentUserEmail;
-        }
+        if (currentUserId) insertData.user_id = currentUserId;
+        if (currentUserEmail) insertData.user_email = currentUserEmail;
         
         await supabase.from('asin_checks').insert(insertData);
       } catch (err) {
         console.error('Failed to save failed run:', err);
       }
       
-      // Log failed run to tool_runs
       await logToolRun({
         toolType: 'asin',
         status: 'failed',
@@ -349,7 +335,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         totalCount: 0,
         successCount: 0,
         issueCount: 0,
-        // Remove the filename line or set to undefined
         metadata: { 
           error: message,
           userEmail: currentUserEmail,
@@ -584,44 +569,54 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
             </div>
           </div>
 
-          {/* Textareas with line gutters */}
+          {/* Textareas with synced line gutters */}
           <div className="grid grid-cols-1 md:grid-cols-2">
-            <div className={`flex border-b md:border-b-0 md:border-r ${isDark ? 'border-slate-700' : 'border-gray-300'}`}>
+          {/* Style ID Column */}
+          <div className={`relative h-[32rem] overflow-auto border-b md:border-b-0 md:border-r ${isDark ? 'border-slate-700 bg-slate-950' : 'border-gray-300 bg-white'}`}>
+            <div className="flex min-h-full w-full">
               <LineGutter text={stylesInput} isDark={isDark} />
               <textarea
                 ref={stylesRef}
-                className={`h-64 w-full resize-none p-4 font-mono text-sm focus:outline-none sm:h-72 md:h-[28rem] ${
-                  isDark ? 'bg-transparent text-slate-200 placeholder-slate-600 focus:bg-slate-800/20' : 'bg-transparent text-gray-900 placeholder-gray-400 focus:bg-gray-50/50'
+                className={`flex-1 resize-none p-4 font-mono text-sm focus:outline-none overflow-hidden ${
+                  isDark ? 'bg-transparent text-slate-200 placeholder-slate-600' : 'bg-transparent text-gray-900 placeholder-gray-400'
                 }`}
-                placeholder={`Example:\nSTYLE-001\nSTYLE-002`}
+                placeholder="Style IDs..."
                 value={stylesInput}
                 onChange={e => setStylesInput(e.target.value)}
-                onScroll={() => syncScroll('styles')}
                 disabled={isChecking}
                 spellCheck={false}
+                /* This line is critical: it forces the height to match the line count */
+                style={{ height: `${Math.max(splitLines(stylesInput).length, 20) * 1.625}rem`, lineHeight: '1.625rem' }}
               />
             </div>
-            <div className="flex">
+          </div>
+
+          {/* ASIN Column */}
+          <div className={`relative h-[32rem] overflow-auto ${isDark ? 'border-slate-700 bg-slate-950' : 'border-gray-300 bg-white'}`}>
+            <div className="flex min-h-full w-full">
               <LineGutter text={asinsInput} isDark={isDark} />
               <textarea
                 ref={asinsRef}
-                className={`h-64 w-full resize-none p-4 font-mono text-sm focus:outline-none sm:h-72 md:h-[28rem] ${
-                  isDark ? 'bg-transparent text-slate-200 placeholder-slate-600 focus:bg-slate-800/20' : 'bg-transparent text-gray-900 placeholder-gray-400 focus:bg-gray-50/50'
+                className={`flex-1 resize-none p-4 font-mono text-sm focus:outline-none overflow-hidden ${
+                  isDark ? 'bg-transparent text-slate-200 placeholder-slate-600' : 'bg-transparent text-gray-900 placeholder-gray-400'
                 }`}
-                placeholder={`Example:\nB08XYZ123AB\nB09ABC456CD`}
+                placeholder="Parent ASINs..."
                 value={asinsInput}
                 onChange={e => setAsinsInput(e.target.value)}
-                onScroll={() => syncScroll('asins')}
                 disabled={isChecking}
                 spellCheck={false}
+                /* Matches the gutter line height exactly */
+                style={{ height: `${Math.max(splitLines(asinsInput).length, 20) * 1.625}rem`, lineHeight: '1.625rem' }}
               />
             </div>
           </div>
         </div>
+        </div>
 
-        {/* Results */}
-        <div className="flex min-h-[300px] flex-1 flex-col">
-          <div className={`flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+        {/* Results - Fixed at bottom with scrollable container */}
+        <div className="flex-1 flex flex-col min-h-0 mt-4">
+          {/* Results Header */}
+          <div className={`flex flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
             isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-300 bg-gray-100/50'
           }`}>
             <div className="flex flex-wrap items-center gap-2">
@@ -636,64 +631,93 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
                 </>
               )}
             </div>
+            {conflicts.length > 0 && (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCopyResults}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
+                    isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200'
+                  }`}
+                >
+                  <Copy className="h-3 w-3" />
+                  Copy
+                </button>
+                <button
+                  onClick={handleExportCSV}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
+                    isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200'
+                  }`}
+                >
+                  <Download className="h-3 w-3" />
+                  Export CSV
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="flex-1 overflow-auto">
+          {/* Fixed height scrollable container - ONLY table scrolls, no empty space */}
+          <div className="overflow-auto" style={{ maxHeight: '400px' }}>
             {conflicts.length === 0 && lastRan && (
-              <EmptyResult icon={<CheckCircle className="h-8 w-8" />} title="No conflicts found!" description="All styles have unique parent ASINs." theme={theme} success />
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <CheckCircle className={`mx-auto h-12 w-12 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                  <p className={`mt-3 font-medium ${strongText}`}>No conflicts found!</p>
+                  <p className={`mt-1 text-sm ${mutedText}`}>All styles have unique parent ASINs.</p>
+                </div>
+              </div>
             )}
+            
             {conflicts.length === 0 && !lastRan && (
-              <EmptyResult icon={<Upload className="h-8 w-8" />} title="Ready to check" description='Paste data above and click "Run Check" or press ⌘↵.' theme={theme} />
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <Upload className={`mx-auto h-12 w-12 ${mutedText}`} />
+                  <p className={`mt-3 font-medium ${strongText}`}>Ready to check</p>
+                  <p className={`mt-1 text-sm ${mutedText}`}>Click "Run Check" or press ⌘↵ to analyze your data.</p>
+                </div>
+              </div>
             )}
+            
             {conflicts.length > 0 && (
-              <div className="w-full overflow-x-auto">
-                <div className="min-w-[720px]">
-                  {/* Table header */}
-                  <div className={`sticky top-0 grid grid-cols-[18rem_1fr_6rem] border-b ${isDark ? 'border-slate-700 bg-slate-800' : 'border-gray-300 bg-gray-200'}`}>
-                    <div className={`border-r p-3 text-xs font-semibold ${isDark ? 'border-slate-700 text-slate-300' : 'border-gray-300 text-gray-700'}`}>Style ID</div>
-                    <div className={`p-3 text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>Unique Parent ASINs</div>
-                    <div className={`p-3 text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>Severity</div>
-                  </div>
-
-                  {conflicts.map(conflict => {
+              <table className="w-full border-collapse text-sm">
+                <thead className={`sticky top-0 z-10 ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
+                  <tr className={`border-b ${isDark ? 'border-slate-700' : 'border-gray-300'}`}>
+                    <th className={`px-4 py-2 text-left text-xs font-semibold ${mutedText}`}>Style ID</th>
+                    <th className={`px-4 py-2 text-left text-xs font-semibold ${mutedText}`}>Parent ASINs</th>
+                    <th className={`px-4 py-2 text-center text-xs font-semibold ${mutedText}`}>Severity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {conflicts.map((conflict) => {
                     const severity = getSeverity(conflict.asins.length);
                     return (
-                      <div
-                        key={conflict.style}
-                        className={`grid grid-cols-[18rem_1fr_6rem] border-b transition-colors ${
-                          isDark ? 'border-slate-700/50 hover:bg-slate-800/30' : 'border-gray-200 hover:bg-gray-50/50'
-                        }`}
-                      >
-                        <div
-                          className={`truncate border-r p-3 text-sm font-medium ${isDark ? 'border-slate-700/50 bg-yellow-600/5 text-slate-200' : 'border-gray-200 bg-yellow-100/30 text-gray-800'}`}
-                          title={conflict.style}
-                        >
+                      <tr key={conflict.style} className={`border-b ${isDark ? 'border-slate-700/50 hover:bg-slate-800/30' : 'border-gray-200 hover:bg-gray-50'}`}>
+                        <td className={`px-4 py-2 text-xs font-mono font-medium ${strongText}`}>
                           {conflict.style}
-                        </div>
-                        <div className="p-3">
-                          <div className="flex flex-wrap gap-2">
-                            {conflict.asins.map(asin => (
+                        </td>
+                        <td className="px-4 py-2">
+                          <div className="flex flex-wrap gap-1">
+                            {conflict.asins.map((asin) => (
                               <span
                                 key={`${conflict.style}-${asin}`}
-                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-xs ${
-                                  isDark ? 'border-red-600/20 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'
+                                className={`inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[11px] ${
+                                  isDark ? 'border-red-600/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'
                                 }`}
                               >
                                 {asin}
                               </span>
                             ))}
                           </div>
-                        </div>
-                        <div className="p-3">
-                          <span className={`inline-block rounded-md border px-2 py-0.5 text-[10px] font-bold ${severity.cls}`}>
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${severity.cls}`}>
                             {severity.label}
                           </span>
-                        </div>
-                      </div>
+                        </td>
+                      </tr>
                     );
                   })}
-                </div>
-              </div>
+                </tbody>
+              </table>
             )}
           </div>
         </div>
@@ -704,26 +728,11 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
 
 function StatCard({ label, value, theme, tone = 'default' }: { label: string; value: number; theme: 'light' | 'dark'; tone?: 'warn' | 'default' }) {
   const isDark = theme === 'dark';
+  const isWarn = tone === 'warn' && value > 0;
   return (
     <div className={`rounded-lg border p-3 ${isDark ? 'border-slate-700/60 bg-slate-800/30' : 'border-gray-200 bg-white/70'}`}>
       <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{label}</p>
-      <p className={`mt-1 text-lg font-semibold tabular-nums ${
-        tone === 'warn' && value > 0 ? 'text-yellow-400' : isDark ? 'text-white' : 'text-gray-900'
-      }`}>{value}</p>
-    </div>
-  );
-}
-
-function EmptyResult({ icon, title, description, theme, success = false }: { icon: React.ReactNode; title: string; description: string; theme: 'light' | 'dark'; success?: boolean }) {
-  const isDark = theme === 'dark';
-  return (
-    <div className="flex h-64 flex-col items-center justify-center px-4 text-center">
-      <div className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
-        success ? isDark ? 'bg-emerald-600/10 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
-        : isDark ? 'bg-slate-800/50 text-slate-500' : 'bg-gray-200/50 text-gray-500'
-      }`}>{icon}</div>
-      <p className={`font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>{title}</p>
-      <p className={`mt-1 max-w-md text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>{description}</p>
+      <p className={`mt-1 text-lg font-semibold tabular-nums ${isWarn ? 'text-yellow-400' : isDark ? 'text-white' : 'text-gray-900'}`}>{value}</p>
     </div>
   );
 }
