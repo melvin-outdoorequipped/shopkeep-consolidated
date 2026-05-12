@@ -196,10 +196,10 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
       }`}>
         <div className="text-center mb-8">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500">
-            <span className="text-2xl font-bold text-white">T</span>
+            <span className="text-2xl font-bold text-white">LOT</span>
           </div>
           <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Welcome to TARA
+            Welcome to LOT
           </h2>
           <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
             {mode === 'signin' ? 'Sign in to access tools' : 'Create an account to get started'}
@@ -459,7 +459,7 @@ export default function HomePage() {
     };
     if (activeMainMenu === 'Documentation') return {
       title: 'Documentation', breadcrumb: 'Resources / Documentation',
-      description: 'Simple guide for using TARA tools.',
+      description: 'Simple guide for using LOT tools.',
     };
     return { title: 'Terms & Conditions', breadcrumb: 'Resources / Terms & Conditions', description: 'Simple usage terms and reminders.' };
   }, [activeMainMenu, activeTool]);
@@ -594,11 +594,11 @@ export default function HomePage() {
             }`}>
               <div className="flex items-center gap-3">
                 <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500 shadow-lg">
-                  <span className="text-lg font-bold text-white">T</span>
+                  <span className="text-lg font-bold text-white">LOT</span>
                   <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#172235] bg-emerald-400" />
                 </div>
                 <div className="min-w-0">
-                  <h1 className={`truncate text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>TARA</h1>
+                  <h1 className={`truncate text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>LOT</h1>
                   <p className={`truncate text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Listing Operations Tools</p>
                 </div>
               </div>
@@ -862,7 +862,7 @@ export default function HomePage() {
                   }`}>
                     <div className={`border-b px-4 py-3 ${isDark ? 'border-slate-700/60' : 'border-gray-100'}`}>
                       <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        {user?.email || 'TARA User'}
+                        {user?.email || 'LOT User'}
                       </p>
                       <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Beta Access · v1.0</p>
                     </div>

@@ -27,10 +27,10 @@ const sections: DocSection[] = [
   {
     id: 'overview',
     title: 'Overview',
-    description: 'Quick guide for using TARA tools.',
+    description: 'Quick guide for using LOT tools.',
     icon: <BookOpen className="h-5 w-5" />,
     content: [
-      'TARA is a listing operations tool suite.',
+      'LOT is a listing operations tool suite.',
       'It helps process SKUs, check ASIN conflicts, generate Basecamp messages, and retrieve brand information.',
       'Use the sidebar to open each tool.',
       'Dashboard shows tool usage and recent activity counts.',
@@ -165,7 +165,7 @@ export default function Documentation({ theme = 'dark' }: DocumentationProps) {
           Documentation
         </h1>
         <p className={`mt-1 text-sm ${mutedText}`}>
-          Simple guide for using the TARA tools.
+          Simple guide for using the LOT tools.
         </p>
 
         {/* Search */}

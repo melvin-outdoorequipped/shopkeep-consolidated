@@ -28,10 +28,10 @@ const sections: TermsSection[] = [
   {
     id: 'acceptance',
     title: 'Acceptance',
-    summary: 'Using TARA means you agree to these basic terms.',
+    summary: 'Using LOT means you agree to these basic terms.',
     icon: <CheckCircle className="h-5 w-5" />,
     items: [
-      'Use TARA only for approved listing operations work.',
+      'Use LOT only for approved listing operations work.',
       'Do not use the tools if you do not agree with these terms.',
       'Terms may be updated when needed.',
     ],
@@ -39,7 +39,7 @@ const sections: TermsSection[] = [
   {
     id: 'use-of-tools',
     title: 'Use of Tools',
-    summary: 'Use TARA responsibly and only for business purposes.',
+    summary: 'Use LOT responsibly and only for business purposes.',
     icon: <Scale className="h-5 w-5" />,
     items: [
       'Use the tools for SKU processing, ASIN checking, downloads, and Basecamp message generation.',
@@ -63,7 +63,7 @@ const sections: TermsSection[] = [
   {
     id: 'ownership',
     title: 'Ownership',
-    summary: 'TARA and its content belong to the company or authorized owners.',
+    summary: 'LOT and its content belong to the company or authorized owners.',
     icon: <FileText className="h-5 w-5" />,
     items: [
       'Do not copy, resell, or redistribute the tools.',
@@ -74,11 +74,11 @@ const sections: TermsSection[] = [
   {
     id: 'accuracy',
     title: 'Accuracy',
-    summary: 'TARA helps with work, but users must still review results.',
+    summary: 'LOT helps with work, but users must still review results.',
     icon: <AlertCircle className="h-5 w-5" />,
     items: [
       'Tool outputs should be reviewed before business use.',
-      'TARA does not guarantee that all results are perfect.',
+      'LOT does not guarantee that all results are perfect.',
       'Users are responsible for validating exports, messages, and reports.',
     ],
   },
@@ -141,7 +141,7 @@ export default function Terms({ theme = 'dark' }: TermsProps) {
             <div className="min-w-0">
               <p className="text-sm font-semibold">Simple usage reminder</p>
               <p className="mt-1 text-xs leading-5 opacity-90">
-                Use TARA only for approved work. Review outputs before using
+                Use LOT only for approved work. Review outputs before using
                 generated data, files, or messages.
               </p>
             </div>
@@ -325,7 +325,7 @@ export default function Terms({ theme = 'dark' }: TermsProps) {
                         isDark ? 'text-slate-300' : 'text-gray-700'
                       }`}
                     >
-                      I acknowledge and agree to use TARA responsibly.
+                      I acknowledge and agree to use LOT responsibly.
                     </span>
                   </label>
 
@@ -358,7 +358,7 @@ export default function Terms({ theme = 'dark' }: TermsProps) {
             isDark ? 'text-slate-500' : 'text-gray-500'
           }`}
         >
-          © {new Date().getFullYear()} TARA - Listing Operations Tool.
+          © {new Date().getFullYear()} LOT - Listing Operations Tool.
           <br />
           For questions, contact your administrator.
         </p>
