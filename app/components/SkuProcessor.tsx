@@ -153,29 +153,33 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
   const fetchBatches = async (uid: string, showAll: boolean) => {
   setIsLoadingBatches(true);
 
-  let query = supabase
-    .from('sku_batches_with_users')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(100);
+  try {
+    let query = supabase
+      .from('sku_batches')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
 
-  // If NOT showing all, filter by user
-  if (!showAll) {
-    query = query.eq('user_id', uid);
-  }
-  // If showAll is true, no filter - shows all users' batches
+    if (!showAll) {
+      query = query.eq('user_id', uid);
+    }
 
-  const { data, error } = await query;
+    const { data, error } = await query;
 
-  if (error) {
-    console.error('Error fetching batches:', error);
-    showFeedback('error', `Failed to load batches: ${error.message}`);
+    if (error) {
+      console.error('Error fetching batches:', error);
+      showFeedback('error', `Failed to load batches: ${error.message}`);
+      setBatches([]);
+    } else {
+      setBatches((data ?? []) as SkuBatchRow[]);
+    }
+  } catch (err) {
+    console.error('Unexpected error:', err);
+    showFeedback('error', 'Failed to load batches');
     setBatches([]);
-  } else {
-    setBatches((data ?? []) as SkuBatchRow[]);
+  } finally {
+    setIsLoadingBatches(false);
   }
-
-  setIsLoadingBatches(false);
 };
 
   const toggleFilter = () => {
