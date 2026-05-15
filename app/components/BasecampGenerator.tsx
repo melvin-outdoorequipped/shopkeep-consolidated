@@ -198,120 +198,154 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
   };
 
   const generateMessage = async () => {
-    setIsGenerating(true);
-    setError('');
-    setGeneratedStats(null);
+  setIsGenerating(true);
+  setError('');
 
-    try {
-      let message = '';
-      const poPrefix = poNumber.trim() ? poNumber.trim() : '[PO Number]';
-      let stats: GenerationStats = { totalSkus: 0, totalQty: 0, issueCount: 0 };
+  try {
+    console.log('Starting message generation...');
+    
+    let message = '';
+    const poPrefix = poNumber.trim() ? poNumber.trim() : '[PO Number]';
+    let stats: GenerationStats = { totalSkus: 0, totalQty: 0, issueCount: 0 };
 
-      if (analysisType === 'initial') {
-        const { totalSkus, totalQty, issuesMap } = parseForInitial(uploadedFiles.listingData);
-        const hasIssues = Object.keys(issuesMap).length > 0;
-        
-        stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
-        
-        message = `Hi Ms, kindly see the initial analysis for this PO#: ${poPrefix}. Thank you!\n`;
-        message += `Total No. of SKUs in Order: ${totalSkus} | QTY: ${totalQty} (Good to Order)\n`;
-        
-        if (hasIssues) {
-          message += `\n`;
-          Object.entries(issuesMap).forEach(([note, data]) => {
-            message += ` | ${note}: ${data.skus} | QTY: ${data.qty}\n`;
-          });
-        }
-        
-        if (doneTracker) message += `\n✅Done updating the tracker\n`;
-        
-      } else if (analysisType === 'final') {
-        const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.listingData);
-        const hasIssues = Object.keys(issuesMap).length > 0;
-        
-        stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
-        
-        message = `Hi Ms, kindly see the Listing Data and Excluded file for this PO#: ${poPrefix}. Thank you!\n`;
-        message += `Total No. of SKUs in Order: ${totalSkus} | QTY: ${totalQty} (Good to Order)\n`;
-        
-        if (uploadedFiles.excluded) {
-          const { totalSkus: exSkus, totalQty: exQty } = parseWithRemarks(uploadedFiles.excluded);
-          if (exSkus > 0) {
-            message += `Total No. of Excluded SKUs: ${exSkus} | QTY: ${exQty}\n`;
-          }
-        }
-        
-        // Only add breakdown if there are actual issues
-        if (hasIssues) {
-          message += `\n`;
-          Object.entries(issuesMap).forEach(([remark, data]) => {
-            message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
-          });
-        } else {
-          // No issues, skip the breakdown line
-          message += ``;
-        }
-        
-        message += shippingPlanError === 'yes' ? `\nShipping Plan Error\n` : `\nNo error in shipping plan creation\n`;
-        if (doneTracker) message += `✅Done updating the tracker\n`;
-        if (doneFbaErrorTracker) message += `✅Done adding to FBA ASIN Errors Encountered tracker\n`;
-        if (doneTrackerSubmission) message += `✅Added to Thorogood - Amazon Deliverables Tracker & Form Submission:\n`;
-        if (suggest3PL === 'yes') message += `Note: Please see the remarks column for items suggested for 3PL.\n`;
-        
-      } else if (analysisType === 'pre-approval') {
-        const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.preApproval);
-        const hasIssues = Object.keys(issuesMap).length > 0;
-        
-        stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
-        
-        message = `Hi, please see the attached Pre-Approval file for these items to see if it is good to order or exclude. Thank you!\n`;
-        message += `Total No. of SKUs for Pre-Approval: ${totalSkus} | QTY: ${totalQty}\n`;
-        
-        if (hasIssues) {
-          message += `\n`;
-          Object.entries(issuesMap).forEach(([remark, data]) => {
-            message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
-          });
-        }
-        
-      } else {
-        // for-fixing
-        const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.listingData || uploadedFiles.preApproval);
-        const hasIssues = Object.keys(issuesMap).length > 0;
-        
-        stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
-        
-        message = `Hi Ms, forwarding this file for fixing. Thank you!\n`;
-        message += `Total No. of SKUs For Fixing in Order: ${totalSkus} | QTY: ${totalQty}\n`;
-        
-        if (hasIssues) {
-          message += `\n`;
-          Object.entries(issuesMap).forEach(([remark, data]) => {
-            message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
-          });
-        }
-        
-        if (doneTracker) message += `\n✅Done updating the tracker\n`;
+    // Add validation for required files
+    if (analysisType === 'pre-approval' && !uploadedFiles.preApproval) {
+      throw new Error('Pre-approval file is required');
+    }
+    if ((analysisType === 'initial' || analysisType === 'final' || analysisType === 'for-fixing') && !uploadedFiles.listingData) {
+      throw new Error('Listing data file is required');
+    }
+
+    console.log('Files validated, processing...');
+
+    if (analysisType === 'initial') {
+      const { totalSkus, totalQty, issuesMap } = parseForInitial(uploadedFiles.listingData);
+      const hasIssues = Object.keys(issuesMap).length > 0;
+      
+      stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+      
+      message = `Hi Ms, kindly see the initial analysis for this PO#: ${poPrefix}. Thank you!\n`;
+      message += `Total No. of SKUs in Order: ${totalSkus} | QTY: ${totalQty} (Good to Order)\n`;
+      
+      if (hasIssues) {
+        message += `\n`;
+        Object.entries(issuesMap).forEach(([note, data]) => {
+          message += ` | ${note}: ${data.skus} | QTY: ${data.qty}\n`;
+        });
       }
+      
+      if (doneTracker) message += `\n✅Done updating the tracker\n`;
+      
+    } else if (analysisType === 'final') {
+      const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.listingData);
+      const hasIssues = Object.keys(issuesMap).length > 0;
+      
+      stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+      
+      message = `Hi Ms, kindly see the Listing Data and Excluded file for this PO#: ${poPrefix}. Thank you!\n`;
+      message += `Total No. of SKUs in Order: ${totalSkus} | QTY: ${totalQty} (Good to Order)\n`;
+      
+      if (uploadedFiles.excluded) {
+        const { totalSkus: exSkus, totalQty: exQty } = parseWithRemarks(uploadedFiles.excluded);
+        if (exSkus > 0) {
+          message += `Total No. of Excluded SKUs: ${exSkus} | QTY: ${exQty}\n`;
+        }
+      }
+      
+      if (hasIssues) {
+        message += `\n`;
+        Object.entries(issuesMap).forEach(([remark, data]) => {
+          message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
+        });
+      }
+      
+      message += shippingPlanError === 'yes' ? `\nShipping Plan Error\n` : `\nNo error in shipping plan creation\n`;
+      if (doneTracker) message += `✅Done updating the tracker\n`;
+      if (doneFbaErrorTracker) message += `✅Done adding to FBA ASIN Errors Encountered tracker\n`;
+      if (doneTrackerSubmission) message += `✅Added to Thorogood - Amazon Deliverables Tracker & Form Submission:\n`;
+      if (suggest3PL === 'yes') message += `Note: Please see the remarks column for items suggested for 3PL.\n`;
+      
+    } else if (analysisType === 'pre-approval') {
+      const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.preApproval);
+      const hasIssues = Object.keys(issuesMap).length > 0;
+      
+      stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+      
+      message = `Hi, please see the attached Pre-Approval file for these items to see if it is good to order or exclude. Thank you!\n`;
+      message += `Total No. of SKUs for Pre-Approval: ${totalSkus} | QTY: ${totalQty}\n`;
+      
+      if (hasIssues) {
+        message += `\n`;
+        Object.entries(issuesMap).forEach(([remark, data]) => {
+          message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
+        });
+      }
+      
+    } else {
+      // for-fixing
+      const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.listingData || uploadedFiles.preApproval);
+      const hasIssues = Object.keys(issuesMap).length > 0;
+      
+      stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+      
+      message = `Hi Ms, forwarding this file for fixing. Thank you!\n`;
+      message += `Total No. of SKUs For Fixing in Order: ${totalSkus} | QTY: ${totalQty}\n`;
+      
+      if (hasIssues) {
+        message += `\n`;
+        Object.entries(issuesMap).forEach(([remark, data]) => {
+          message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
+        });
+      }
+      
+      if (doneTracker) message += `\n✅Done updating the tracker\n`;
+    }
 
-      setGeneratedMessage(message);
-      setGeneratedStats(stats);
+    console.log('Message generated, saving to database...');
+
+    setGeneratedMessage(message);
+    setGeneratedStats(stats);
+    
+    // Try to save to database, but don't fail if it doesn't work
+    try {
       await saveBasecampGeneration({ message, stats, status: 'completed' });
+      console.log('Saved to database successfully');
+    } catch (dbError) {
+      console.error('Database save failed:', dbError);
+      // Continue - don't show error to user since message was generated
+    }
+    
+    try {
       await logToolRun({
         toolType: 'basecamp', status: 'completed', title: 'Basecamp message generated',
         description: `${analysisType.replace('-', ' ')} message generated${poNumber.trim() ? ` for PO ${poNumber.trim()}` : ''}.`,
         totalCount: stats.totalSkus, successCount: stats.totalQty, issueCount: stats.issueCount,
         metadata: { poNumber: poNumber.trim() || null, analysisType, ...stats, preApprovalFilename: uploadedFiles.preApproval?.filename ?? null, listingDataFilename: uploadedFiles.listingData?.filename ?? null, excludedFilename: uploadedFiles.excluded?.filename ?? null },
       });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to generate Basecamp message.';
-      try { await saveBasecampGeneration({ message: null, stats: { totalSkus: 0, totalQty: 0, issueCount: 1 }, status: 'failed', errorMessage: msg }); } catch {}
-      await logToolRun({ toolType: 'basecamp', status: 'failed', title: 'Basecamp message generation failed', description: msg, totalCount: 0, successCount: 0, issueCount: 1, metadata: { poNumber: poNumber.trim() || null, analysisType } });
-      setError('Failed to generate message. Please check your files and try again.');
-    } finally {
-      setIsGenerating(false);
+      console.log('Logged to tool runs successfully');
+    } catch (logError) {
+      console.error('Logging failed:', logError);
     }
-  };
+    
+  } catch (err) {
+    console.error('Generation error:', err);
+    const msg = err instanceof Error ? err.message : 'Failed to generate Basecamp message.';
+    setError(msg);
+    
+    // Try to save error to database
+    try {
+      await saveBasecampGeneration({ message: null, stats: { totalSkus: 0, totalQty: 0, issueCount: 1 }, status: 'failed', errorMessage: msg });
+    } catch {}
+    
+    await logToolRun({ 
+      toolType: 'basecamp', status: 'failed', title: 'Basecamp message generation failed', 
+      description: msg, totalCount: 0, successCount: 0, issueCount: 1, 
+      metadata: { poNumber: poNumber.trim() || null, analysisType } 
+    });
+  } finally {
+    setIsGenerating(false);
+  }
+};
 
   const copyToClipboard = async () => {
     await navigator.clipboard.writeText(generatedMessage);
